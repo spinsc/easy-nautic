@@ -12,6 +12,7 @@ import {
   removePrestadorCategoria,
   uploadDocumentoPrestador,
   getUrlDocumentoPrestador,
+  souAdmin,
 } from '@/lib/api'
 import type { CategoriaServico, Prestador, PrestadorCategoria, StatusVerificacao } from '@/types'
 
@@ -53,6 +54,7 @@ export default function Perfil() {
   const [marcasAtendidas, setMarcasAtendidas] = useState('')
 
   const [enviandoDocumento, setEnviandoDocumento] = useState(false)
+  const [ehAdmin, setEhAdmin] = useState(false)
 
   async function carregar() {
     setCarregando(true)
@@ -62,9 +64,14 @@ export default function Perfil() {
       if (p) {
         setNome(p.nome)
         setTelefone(p.telefone ?? '')
-        const [cats, minhas] = await Promise.all([listCategoriasServico(), listPrestadorCategorias(p.id)])
+        const [cats, minhas, admin] = await Promise.all([
+          listCategoriasServico(),
+          listPrestadorCategorias(p.id),
+          souAdmin(),
+        ])
         setCategorias(cats)
         setMinhasCategorias(minhas)
+        setEhAdmin(admin)
       }
       setErro(null)
     } catch (e) {
@@ -180,6 +187,11 @@ export default function Perfil() {
           <Link to="/chamados" className="text-sm text-slate-500 hover:text-slate-900">
             Chamados
           </Link>
+          {ehAdmin && (
+            <Link to="/admin" className="text-sm text-slate-500 hover:text-slate-900">
+              Admin
+            </Link>
+          )}
           <button
             onClick={() => supabase.auth.signOut()}
             className="text-sm text-slate-500 hover:text-slate-900"

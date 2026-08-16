@@ -9,6 +9,7 @@ import type {
   EquipamentoEmbarcado,
   Prestador,
   PrestadorCategoria,
+  StatusVerificacao,
   TipoPessoa,
 } from '@/types'
 
@@ -251,6 +252,34 @@ export async function atualizarStatusChamado(
   if (status === 'concluido') patch.concluido_em = new Date().toISOString()
   const { error } = await supabase.from('chamados').update(patch).eq('id', id)
   if (error) throw error
+}
+
+// ---------- Painel admin ----------
+
+export async function souAdmin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('sou_admin')
+  if (error) throw error
+  return Boolean(data)
+}
+
+export async function listPrestadoresAdmin(filtroStatus?: StatusVerificacao): Promise<Prestador[]> {
+  let query = supabase.from('prestadores').select('*').order('criado_em', { ascending: false })
+  if (filtroStatus) query = query.eq('status_verificacao', filtroStatus)
+  const { data, error } = await query
+  if (error) throw error
+  return data ?? []
+}
+
+export async function listTodosChamadosAdmin(): Promise<(Chamado & { embarcacao_nome: string })[]> {
+  const { data, error } = await supabase
+    .from('chamados')
+    .select('*, embarcacoes(nome)')
+    .order('criado_em', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const { embarcacoes, ...chamado } = row as unknown as Chamado & { embarcacoes: { nome: string } | null }
+    return { ...chamado, embarcacao_nome: embarcacoes?.nome ?? '—' }
+  })
 }
 
 // ---------- Página pública por tag ----------

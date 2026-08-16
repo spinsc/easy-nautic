@@ -10,6 +10,7 @@ import Embarcacoes from './pages/Embarcacoes'
 import EmbarcacaoFicha from './pages/EmbarcacaoFicha'
 import EmbarcacaoPublica from './pages/EmbarcacaoPublica'
 import Chamados from './pages/Chamados'
+import Admin from './pages/Admin'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/embarcacoes" element={session ? <Embarcacoes /> : <Navigate to="/login" />} />
         <Route path="/embarcacoes/:id" element={session ? <EmbarcacaoFicha /> : <Navigate to="/login" />} />
         <Route path="/chamados" element={session ? <Chamados /> : <Navigate to="/login" />} />
+        <Route path="/admin" element={session ? <Admin /> : <Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
   )
