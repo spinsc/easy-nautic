@@ -6,6 +6,7 @@ import type {
   Embarcacao,
   EmbarcacaoPublicaData,
   EmbarcacaoTag,
+  EmbarcacaoTripulante,
   EquipamentoEmbarcado,
   Prestador,
   PrestadorCategoria,
@@ -123,11 +124,11 @@ export async function getEmbarcacao(id: string): Promise<Embarcacao | null> {
 }
 
 export async function createEmbarcacao(
-  embarcacao: Omit<Embarcacao, 'id' | 'estado_geral' | 'atributos' | 'criado_em'>
+  embarcacao: Omit<Embarcacao, 'id' | 'estado_geral' | 'atributos' | 'documentos' | 'fotos' | 'criado_em'>
 ): Promise<Embarcacao> {
   const { data, error } = await supabase
     .from('embarcacoes')
-    .insert({ ...embarcacao, estado_geral: {}, atributos: {} })
+    .insert({ ...embarcacao, estado_geral: {}, atributos: {}, documentos: [], fotos: [] })
     .select()
     .single()
   if (error) throw error
@@ -136,10 +137,65 @@ export async function createEmbarcacao(
 
 export async function updateEmbarcacao(
   id: string,
-  patch: Partial<Omit<Embarcacao, 'id' | 'estaleiro_id' | 'criado_em'>>
+  patch: Partial<Omit<Embarcacao, 'id' | 'estaleiro_id' | 'proprietario_id' | 'criado_em'>>
 ): Promise<void> {
   const { error } = await supabase.from('embarcacoes').update(patch).eq('id', id)
   if (error) throw error
+}
+
+export async function uploadMidiaEmbarcacao(
+  embarcacaoId: string,
+  file: File,
+  tipo: 'documentos' | 'fotos'
+): Promise<DocumentoVerificacao> {
+  const path = `${embarcacaoId}/${tipo}/${crypto.randomUUID()}-${file.name}`
+  const { error } = await supabase.storage.from('midia-embarcacoes').upload(path, file)
+  if (error) throw error
+  return { path, nome_arquivo: file.name }
+}
+
+export async function getUrlMidiaEmbarcacao(path: string): Promise<string> {
+  const { data, error } = await supabase.storage.from('midia-embarcacoes').createSignedUrl(path, 60 * 10)
+  if (error) throw error
+  return data.signedUrl
+}
+
+// ---------- Tripulação (marinheiro vinculado a embarcações) ----------
+
+export async function listTripulacao(
+  embarcacaoId: string
+): Promise<(EmbarcacaoTripulante & { marinheiro_nome: string })[]> {
+  const { data, error } = await supabase
+    .from('embarcacao_tripulantes')
+    .select('*, prestadores(nome)')
+    .eq('embarcacao_id', embarcacaoId)
+    .order('criado_em')
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const { prestadores, ...t } = row as unknown as EmbarcacaoTripulante & { prestadores: { nome: string } | null }
+    return { ...t, marinheiro_nome: prestadores?.nome ?? '—' }
+  })
+}
+
+export async function addTripulante(embarcacaoId: string, marinheiroId: string, funcao: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('embarcacao_tripulantes')
+    .insert({ embarcacao_id: embarcacaoId, marinheiro_id: marinheiroId, funcao })
+  if (error) throw error
+}
+
+export async function removeTripulante(id: string): Promise<void> {
+  const { error } = await supabase.from('embarcacao_tripulantes').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listPrestadoresPorCategoria(categoriaServicoId: string): Promise<Prestador[]> {
+  const { data, error } = await supabase
+    .from('prestador_categorias')
+    .select('prestadores(*)')
+    .eq('categoria_servico_id', categoriaServicoId)
+  if (error) throw error
+  return (data ?? []).map((row) => row.prestadores as unknown as Prestador).filter(Boolean)
 }
 
 export async function deleteEmbarcacao(id: string): Promise<void> {

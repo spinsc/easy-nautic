@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { mensagemErro } from '@/lib/errors'
-import { CampoTexto, CampoSelect } from '@/components/campos'
+import { CampoTexto, CampoSelect, CampoNumero, CampoCheckbox } from '@/components/campos'
 import {
   listCategoriasServico,
   getMeuPrestador,
@@ -52,6 +52,12 @@ export default function Perfil() {
   const [especialidade, setEspecialidade] = useState('')
   const [regiaoAtuacao, setRegiaoAtuacao] = useState('')
   const [marcasAtendidas, setMarcasAtendidas] = useState('')
+  const [diasDisponiveis, setDiasDisponiveis] = useState('')
+  const [periodoDisponivel, setPeriodoDisponivel] = useState('')
+  const [valorDiaria, setValorDiaria] = useState<number | null>(null)
+  const [habilidadeCulinaria, setHabilidadeCulinaria] = useState('')
+  const [barman, setBarman] = useState(false)
+  const [categoriaHabilitacao, setCategoriaHabilitacao] = useState('')
 
   const [enviandoDocumento, setEnviandoDocumento] = useState(false)
   const [ehAdmin, setEhAdmin] = useState(false)
@@ -103,10 +109,6 @@ export default function Perfil() {
     (c) => !minhasCategorias.some((mc) => mc.categoria_servico_id === c.id)
   )
 
-  const ehEstaleiro = minhasCategorias.some(
-    (mc) => categorias.find((c) => c.id === mc.categoria_servico_id)?.nome === 'Estaleiro'
-  )
-
   async function adicionarCategoria() {
     if (!prestador || !categoriaSelecionada) return
     try {
@@ -116,11 +118,23 @@ export default function Perfil() {
         especialidade: especialidade || null,
         regiao_atuacao: regiaoAtuacao || null,
         marcas_atendidas: textoParaLista(marcasAtendidas),
+        dias_disponiveis: textoParaLista(diasDisponiveis),
+        periodo_disponivel: periodoDisponivel || null,
+        valor_diaria: valorDiaria,
+        habilidade_culinaria: habilidadeCulinaria || null,
+        barman,
+        categoria_habilitacao: categoriaHabilitacao || null,
       })
       setCategoriaSelecionada('')
       setEspecialidade('')
       setRegiaoAtuacao('')
       setMarcasAtendidas('')
+      setDiasDisponiveis('')
+      setPeriodoDisponivel('')
+      setValorDiaria(null)
+      setHabilidadeCulinaria('')
+      setBarman(false)
+      setCategoriaHabilitacao('')
       setAdicionandoCategoria(false)
       await carregar()
     } catch (e) {
@@ -179,11 +193,9 @@ export default function Perfil() {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          {ehEstaleiro && (
-            <Link to="/embarcacoes" className="text-sm text-slate-500 hover:text-slate-900">
-              Embarcações
-            </Link>
-          )}
+          <Link to="/embarcacoes" className="text-sm text-slate-500 hover:text-slate-900">
+            Embarcações
+          </Link>
           <Link to="/chamados" className="text-sm text-slate-500 hover:text-slate-900">
             Chamados
           </Link>
@@ -252,6 +264,22 @@ export default function Perfil() {
                     {mc.marcas_atendidas.length > 0 && (
                       <p className="text-xs text-slate-500">Marcas: {listaParaTexto(mc.marcas_atendidas)}</p>
                     )}
+                    {mc.categoria_habilitacao && (
+                      <p className="text-xs text-slate-500">Habilitação: {mc.categoria_habilitacao}</p>
+                    )}
+                    {mc.dias_disponiveis.length > 0 && (
+                      <p className="text-xs text-slate-500">
+                        Disponível: {listaParaTexto(mc.dias_disponiveis)}
+                        {mc.periodo_disponivel && ` (${mc.periodo_disponivel})`}
+                      </p>
+                    )}
+                    {mc.valor_diaria != null && (
+                      <p className="text-xs text-slate-500">Diária: R$ {mc.valor_diaria}</p>
+                    )}
+                    {mc.habilidade_culinaria && (
+                      <p className="text-xs text-slate-500">Cozinha: {mc.habilidade_culinaria}</p>
+                    )}
+                    {mc.barman && <p className="text-xs text-slate-500">Barman</p>}
                   </div>
                   <button
                     onClick={() => removerCategoria(mc.id)}
@@ -282,6 +310,22 @@ export default function Perfil() {
               <CampoTexto label="Marcas que atende (opcional)" value={marcasAtendidas} onChange={setMarcasAtendidas} />
               <p className="mt-1 text-xs text-slate-400">Separe por vírgula — ex: Mercury, Volvo Penta.</p>
             </div>
+            {categorias.find((c) => c.id === categoriaSelecionada)?.nome === 'Marinheiro' && (
+              <div className="space-y-4 border-t border-slate-200 pt-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Dados de marinheiro</p>
+                <CampoTexto label="Categoria de habilitação" value={categoriaHabilitacao} onChange={setCategoriaHabilitacao} placeholder="ex: Arrais Amador" />
+                <div>
+                  <CampoTexto label="Dias disponíveis" value={diasDisponiveis} onChange={setDiasDisponiveis} placeholder="ex: sáb, dom" />
+                  <p className="mt-1 text-xs text-slate-400">Separe por vírgula.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <CampoTexto label="Período" value={periodoDisponivel} onChange={setPeriodoDisponivel} placeholder="ex: manhã e tarde" />
+                  <CampoNumero label="Valor da diária (R$)" value={valorDiaria} onChange={setValorDiaria} />
+                </div>
+                <CampoTexto label="Habilidade culinária (opcional)" value={habilidadeCulinaria} onChange={setHabilidadeCulinaria} placeholder="ex: Chef especializado em frutos do mar" />
+                <CampoCheckbox label="Atua como barman" checked={barman} onChange={setBarman} />
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={adicionarCategoria}

@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { mensagemErro } from '@/lib/errors'
-import { listMinhasEmbarcacoes, createEmbarcacao, getMeuPrestador } from '@/lib/api'
-import { CampoTexto, CampoNumero, CampoData } from '@/components/campos'
+import {
+  listMinhasEmbarcacoes,
+  createEmbarcacao,
+  getMeuPrestador,
+  listCategoriasServico,
+  listPrestadorCategorias,
+} from '@/lib/api'
+import { CampoTexto, CampoNumero, CampoData, CampoSelect } from '@/components/campos'
 import type { Embarcacao } from '@/types'
 
 const EMBARCACAO_VAZIA = {
@@ -17,6 +23,15 @@ const EMBARCACAO_VAZIA = {
   ano: null as number | null,
   data_venda: '',
   prazo_garantia_casco_meses: null as number | null,
+  motorizacao: '',
+  capacidade_pessoas: null as number | null,
+  calado: null as number | null,
+  boca: null as number | null,
+  tipo_casco: '',
+  combustivel: '',
+  marina: '',
+  vaga: '',
+  cidade: '',
 }
 
 export default function Embarcacoes() {
@@ -26,11 +41,18 @@ export default function Embarcacoes() {
   const [criando, setCriando] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [form, setForm] = useState(EMBARCACAO_VAZIA)
+  const [ehEstaleiro, setEhEstaleiro] = useState(false)
+  const [modo, setModo] = useState<'proprietario' | 'estaleiro'>('proprietario')
 
   async function carregar() {
     setCarregando(true)
     try {
-      setItens(await listMinhasEmbarcacoes())
+      const [lista, prestador] = await Promise.all([listMinhasEmbarcacoes(), getMeuPrestador()])
+      setItens(lista)
+      if (prestador) {
+        const [cats, minhas] = await Promise.all([listCategoriasServico(), listPrestadorCategorias(prestador.id)])
+        setEhEstaleiro(minhas.some((mc) => cats.find((c) => c.id === mc.categoria_servico_id)?.nome === 'Estaleiro'))
+      }
       setErro(null)
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao carregar embarcações'))
@@ -48,11 +70,13 @@ export default function Embarcacoes() {
     try {
       const prestador = await getMeuPrestador()
       if (!prestador) throw new Error('Prestador não encontrado.')
+      const comoEstaleiro = ehEstaleiro && modo === 'estaleiro'
       await createEmbarcacao({
-        estaleiro_id: prestador.id,
-        cliente_nome: form.cliente_nome,
-        cliente_telefone: form.cliente_telefone || null,
-        cliente_email: form.cliente_email || null,
+        estaleiro_id: comoEstaleiro ? prestador.id : null,
+        proprietario_id: comoEstaleiro ? null : prestador.id,
+        cliente_nome: comoEstaleiro ? form.cliente_nome : prestador.nome,
+        cliente_telefone: comoEstaleiro ? form.cliente_telefone || null : prestador.telefone,
+        cliente_email: comoEstaleiro ? form.cliente_email || null : prestador.email,
         nome: form.nome,
         fabricante: form.fabricante || null,
         modelo: form.modelo || null,
@@ -61,6 +85,19 @@ export default function Embarcacoes() {
         ano: form.ano,
         data_venda: form.data_venda || null,
         prazo_garantia_casco_meses: form.prazo_garantia_casco_meses,
+        motorizacao: form.motorizacao || null,
+        capacidade_pessoas: form.capacidade_pessoas,
+        calado: form.calado,
+        boca: form.boca,
+        tipo_casco: form.tipo_casco || null,
+        combustivel: form.combustivel || null,
+        marina: form.marina || null,
+        vaga: form.vaga || null,
+        cidade: form.cidade || null,
+        numero_tie: null,
+        seguradora: null,
+        apolice_seguro: null,
+        vistoria_validade: null,
       })
       setForm(EMBARCACAO_VAZIA)
       setCriando(false)
@@ -138,11 +175,26 @@ export default function Embarcacoes() {
           <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6">
             <h2 className="mb-4 font-display text-xl text-slate-900">Nova embarcação</h2>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <CampoTexto label="Nome do cliente" value={form.cliente_nome} onChange={(v) => setForm({ ...form, cliente_nome: v })} required />
-                <CampoTexto label="Telefone do cliente" type="tel" value={form.cliente_telefone} onChange={(v) => setForm({ ...form, cliente_telefone: v })} />
-              </div>
-              <CampoTexto label="E-mail do cliente" type="email" value={form.cliente_email} onChange={(v) => setForm({ ...form, cliente_email: v })} />
+              {ehEstaleiro && (
+                <CampoSelect
+                  label="Cadastrar como"
+                  value={modo}
+                  onChange={(v) => setModo(v as 'proprietario' | 'estaleiro')}
+                  options={[
+                    { value: 'proprietario', label: 'Minha própria embarcação' },
+                    { value: 'estaleiro', label: 'Embarcação de um cliente' },
+                  ]}
+                />
+              )}
+              {ehEstaleiro && modo === 'estaleiro' && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <CampoTexto label="Nome do cliente" value={form.cliente_nome} onChange={(v) => setForm({ ...form, cliente_nome: v })} required />
+                    <CampoTexto label="Telefone do cliente" type="tel" value={form.cliente_telefone} onChange={(v) => setForm({ ...form, cliente_telefone: v })} />
+                  </div>
+                  <CampoTexto label="E-mail do cliente" type="email" value={form.cliente_email} onChange={(v) => setForm({ ...form, cliente_email: v })} />
+                </>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <CampoTexto label="Nome da embarcação" value={form.nome} onChange={(v) => setForm({ ...form, nome: v })} required />
                 <CampoTexto label="Número de registro" value={form.numero_registro} onChange={(v) => setForm({ ...form, numero_registro: v })} />
@@ -163,10 +215,44 @@ export default function Embarcacoes() {
                   onChange={(v) => setForm({ ...form, prazo_garantia_casco_meses: v })}
                 />
               </div>
+
+              <div className="border-t border-slate-200 pt-4">
+                <p className="mb-3 text-sm font-medium text-slate-900">Especificações técnicas</p>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <CampoTexto label="Motorização" value={form.motorizacao} onChange={(v) => setForm({ ...form, motorizacao: v })} placeholder="ex: 2x Mercury 300HP" />
+                    <CampoNumero label="Capacidade (pessoas)" value={form.capacidade_pessoas} onChange={(v) => setForm({ ...form, capacidade_pessoas: v })} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <CampoNumero label="Calado (m)" value={form.calado} onChange={(v) => setForm({ ...form, calado: v })} />
+                    <CampoNumero label="Boca (m)" value={form.boca} onChange={(v) => setForm({ ...form, boca: v })} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <CampoTexto label="Tipo de casco" value={form.tipo_casco} onChange={(v) => setForm({ ...form, tipo_casco: v })} placeholder="ex: Monocasco" />
+                    <CampoTexto label="Combustível" value={form.combustivel} onChange={(v) => setForm({ ...form, combustivel: v })} placeholder="ex: Gasolina" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-4">
+                <p className="mb-3 text-sm font-medium text-slate-900">Localização</p>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <CampoTexto label="Marina" value={form.marina} onChange={(v) => setForm({ ...form, marina: v })} />
+                    <CampoTexto label="Vaga" value={form.vaga} onChange={(v) => setForm({ ...form, vaga: v })} />
+                  </div>
+                  <CampoTexto label="Cidade" value={form.cidade} onChange={(v) => setForm({ ...form, cidade: v })} />
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-400">
+                Documentação, fotos e tripulação podem ser adicionadas depois, na ficha da embarcação.
+              </p>
+
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={salvar}
-                  disabled={salvando || !form.nome.trim() || !form.cliente_nome.trim()}
+                  disabled={salvando || !form.nome.trim() || (ehEstaleiro && modo === 'estaleiro' && !form.cliente_nome.trim())}
                   className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
                 >
                   {salvando ? 'Salvando…' : 'Salvar'}

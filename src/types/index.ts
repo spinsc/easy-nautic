@@ -34,6 +34,12 @@ export interface PrestadorCategoria {
   especialidade: string | null
   regiao_atuacao: string | null
   marcas_atendidas: string[]
+  dias_disponiveis: string[]
+  periodo_disponivel: string | null
+  valor_diaria: number | null
+  habilidade_culinaria: string | null
+  barman: boolean
+  categoria_habilitacao: string | null
   criado_em: string
 }
 
@@ -43,7 +49,8 @@ export type TipoChamado = 'comercial' | 'garantia'
 
 export interface Embarcacao {
   id: string
-  estaleiro_id: string
+  estaleiro_id: string | null
+  proprietario_id: string | null
   cliente_nome: string
   cliente_telefone: string | null
   cliente_email: string | null
@@ -55,8 +62,31 @@ export interface Embarcacao {
   ano: number | null
   data_venda: string | null
   prazo_garantia_casco_meses: number | null
+  motorizacao: string | null
+  capacidade_pessoas: number | null
+  calado: number | null
+  boca: number | null
+  tipo_casco: string | null
+  combustivel: string | null
+  marina: string | null
+  vaga: string | null
+  cidade: string | null
+  numero_tie: string | null
+  seguradora: string | null
+  apolice_seguro: string | null
+  vistoria_validade: string | null
+  documentos: DocumentoVerificacao[]
+  fotos: DocumentoVerificacao[]
   estado_geral: Record<string, string>
   atributos: Record<string, string | number | boolean | null>
+  criado_em: string
+}
+
+export interface EmbarcacaoTripulante {
+  id: string
+  embarcacao_id: string
+  marinheiro_id: string
+  funcao: string | null
   criado_em: string
 }
 

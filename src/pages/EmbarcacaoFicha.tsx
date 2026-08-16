@@ -4,6 +4,7 @@ import { mensagemErro } from '@/lib/errors'
 import { CampoTexto, CampoSelect, CampoData, CampoNumero } from '@/components/campos'
 import {
   getEmbarcacao,
+  updateEmbarcacao,
   listEquipamentos,
   createEquipamento,
   deleteEquipamento,
@@ -11,8 +12,24 @@ import {
   createTag,
   listChamadosDaEmbarcacao,
   atualizarStatusChamado,
+  uploadMidiaEmbarcacao,
+  getUrlMidiaEmbarcacao,
+  listTripulacao,
+  addTripulante,
+  removeTripulante,
+  listPrestadoresPorCategoria,
+  listCategoriasServico,
 } from '@/lib/api'
-import type { CategoriaEquipamento, Chamado, Embarcacao, EmbarcacaoTag, EquipamentoEmbarcado, StatusChamado } from '@/types'
+import type {
+  CategoriaEquipamento,
+  Chamado,
+  Embarcacao,
+  EmbarcacaoTag,
+  EmbarcacaoTripulante,
+  EquipamentoEmbarcado,
+  Prestador,
+  StatusChamado,
+} from '@/types'
 
 const CATEGORIA_LABELS: Record<CategoriaEquipamento, string> = {
   MOTOR: 'Motor',
@@ -44,6 +61,22 @@ const EQUIPAMENTO_VAZIO = {
   prazo_garantia_meses: null as number | null,
 }
 
+const DETALHES_VAZIO = {
+  motorizacao: '',
+  capacidade_pessoas: null as number | null,
+  calado: null as number | null,
+  boca: null as number | null,
+  tipo_casco: '',
+  combustivel: '',
+  marina: '',
+  vaga: '',
+  cidade: '',
+  numero_tie: '',
+  seguradora: '',
+  apolice_seguro: '',
+  vistoria_validade: '',
+}
+
 const BASE_URL_TAG = `${window.location.origin}${import.meta.env.BASE_URL}b/`
 
 export default function EmbarcacaoFicha() {
@@ -52,6 +85,8 @@ export default function EmbarcacaoFicha() {
   const [equipamentos, setEquipamentos] = useState<EquipamentoEmbarcado[]>([])
   const [tags, setTags] = useState<EmbarcacaoTag[]>([])
   const [chamados, setChamados] = useState<Chamado[]>([])
+  const [tripulacao, setTripulacao] = useState<(EmbarcacaoTripulante & { marinheiro_nome: string })[]>([])
+  const [marinheirosDisponiveis, setMarinheirosDisponiveis] = useState<Prestador[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -61,20 +96,53 @@ export default function EmbarcacaoFicha() {
   const [adicionandoTag, setAdicionandoTag] = useState(false)
   const [novoTagId, setNovoTagId] = useState('')
 
+  const [editandoDetalhes, setEditandoDetalhes] = useState(false)
+  const [detalhes, setDetalhes] = useState(DETALHES_VAZIO)
+  const [salvandoDetalhes, setSalvandoDetalhes] = useState(false)
+
+  const [enviandoMidia, setEnviandoMidia] = useState(false)
+
+  const [marinheiroSelecionado, setMarinheiroSelecionado] = useState('')
+  const [funcaoTripulante, setFuncaoTripulante] = useState('')
+
   async function carregar() {
     if (!id) return
     setCarregando(true)
     try {
-      const [emb, eq, tg, ch] = await Promise.all([
+      const [emb, eq, tg, ch, trip, cats] = await Promise.all([
         getEmbarcacao(id),
         listEquipamentos(id),
         listTags(id),
         listChamadosDaEmbarcacao(id),
+        listTripulacao(id),
+        listCategoriasServico(),
       ])
       setEmbarcacao(emb)
       setEquipamentos(eq)
       setTags(tg)
       setChamados(ch)
+      setTripulacao(trip)
+      if (emb) {
+        setDetalhes({
+          motorizacao: emb.motorizacao ?? '',
+          capacidade_pessoas: emb.capacidade_pessoas,
+          calado: emb.calado,
+          boca: emb.boca,
+          tipo_casco: emb.tipo_casco ?? '',
+          combustivel: emb.combustivel ?? '',
+          marina: emb.marina ?? '',
+          vaga: emb.vaga ?? '',
+          cidade: emb.cidade ?? '',
+          numero_tie: emb.numero_tie ?? '',
+          seguradora: emb.seguradora ?? '',
+          apolice_seguro: emb.apolice_seguro ?? '',
+          vistoria_validade: emb.vistoria_validade ?? '',
+        })
+      }
+      const categoriaMarinheiro = cats.find((c) => c.nome === 'Marinheiro')
+      if (categoriaMarinheiro) {
+        setMarinheirosDisponiveis(await listPrestadoresPorCategoria(categoriaMarinheiro.id))
+      }
       setErro(null)
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao carregar embarcação'))
@@ -141,8 +209,84 @@ export default function EmbarcacaoFicha() {
     }
   }
 
+  async function salvarDetalhes() {
+    if (!id) return
+    setSalvandoDetalhes(true)
+    try {
+      await updateEmbarcacao(id, {
+        motorizacao: detalhes.motorizacao || null,
+        capacidade_pessoas: detalhes.capacidade_pessoas,
+        calado: detalhes.calado,
+        boca: detalhes.boca,
+        tipo_casco: detalhes.tipo_casco || null,
+        combustivel: detalhes.combustivel || null,
+        marina: detalhes.marina || null,
+        vaga: detalhes.vaga || null,
+        cidade: detalhes.cidade || null,
+        numero_tie: detalhes.numero_tie || null,
+        seguradora: detalhes.seguradora || null,
+        apolice_seguro: detalhes.apolice_seguro || null,
+        vistoria_validade: detalhes.vistoria_validade || null,
+      })
+      setEditandoDetalhes(false)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao salvar detalhes'))
+    } finally {
+      setSalvandoDetalhes(false)
+    }
+  }
+
+  async function handleUploadMidia(file: File, tipo: 'documentos' | 'fotos') {
+    if (!id || !embarcacao) return
+    setEnviandoMidia(true)
+    try {
+      const item = await uploadMidiaEmbarcacao(id, file, tipo)
+      await updateEmbarcacao(id, { [tipo]: [...embarcacao[tipo], item] })
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao enviar arquivo'))
+    } finally {
+      setEnviandoMidia(false)
+    }
+  }
+
+  async function abrirMidia(path: string) {
+    try {
+      const url = await getUrlMidiaEmbarcacao(path)
+      window.open(url, '_blank')
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao abrir arquivo'))
+    }
+  }
+
+  async function vincularTripulante() {
+    if (!id || !marinheiroSelecionado) return
+    try {
+      await addTripulante(id, marinheiroSelecionado, funcaoTripulante || null)
+      setMarinheiroSelecionado('')
+      setFuncaoTripulante('')
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao vincular marinheiro'))
+    }
+  }
+
+  async function desvincularTripulante(tripulanteId: string) {
+    try {
+      await removeTripulante(tripulanteId)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao remover tripulante'))
+    }
+  }
+
   if (carregando) return <p className="p-8 text-sm text-slate-400">Carregando…</p>
   if (!embarcacao) return <p className="p-8 text-sm text-slate-400">Embarcação não encontrada.</p>
+
+  const marinheirosNaoVinculados = marinheirosDisponiveis.filter(
+    (m) => !tripulacao.some((t) => t.marinheiro_id === m.id)
+  )
 
   return (
     <div className="mx-auto max-w-3xl p-8">
@@ -160,6 +304,181 @@ export default function EmbarcacaoFicha() {
           {erro}
         </div>
       )}
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-display text-lg text-slate-900">Especificações, localização e documentação</h2>
+          {!editandoDetalhes && (
+            <button onClick={() => setEditandoDetalhes(true)} className="text-sm font-medium text-tide-600 hover:text-tide-700">
+              Editar
+            </button>
+          )}
+        </div>
+
+        {!editandoDetalhes ? (
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <p className="text-slate-500">Motorização: <span className="text-slate-900">{embarcacao.motorizacao ?? '—'}</span></p>
+            <p className="text-slate-500">Capacidade: <span className="text-slate-900">{embarcacao.capacidade_pessoas ?? '—'}</span></p>
+            <p className="text-slate-500">Calado: <span className="text-slate-900">{embarcacao.calado ?? '—'}</span></p>
+            <p className="text-slate-500">Boca: <span className="text-slate-900">{embarcacao.boca ?? '—'}</span></p>
+            <p className="text-slate-500">Tipo de casco: <span className="text-slate-900">{embarcacao.tipo_casco ?? '—'}</span></p>
+            <p className="text-slate-500">Combustível: <span className="text-slate-900">{embarcacao.combustivel ?? '—'}</span></p>
+            <p className="text-slate-500">Marina: <span className="text-slate-900">{embarcacao.marina ?? '—'}</span></p>
+            <p className="text-slate-500">Vaga: <span className="text-slate-900">{embarcacao.vaga ?? '—'}</span></p>
+            <p className="text-slate-500">Cidade: <span className="text-slate-900">{embarcacao.cidade ?? '—'}</span></p>
+            <p className="text-slate-500">TIE: <span className="text-slate-900">{embarcacao.numero_tie ?? '—'}</span></p>
+            <p className="text-slate-500">Seguradora: <span className="text-slate-900">{embarcacao.seguradora ?? '—'}</span></p>
+            <p className="text-slate-500">Apólice: <span className="text-slate-900">{embarcacao.apolice_seguro ?? '—'}</span></p>
+            <p className="text-slate-500">Vistoria válida até: <span className="text-slate-900">{embarcacao.vistoria_validade ?? '—'}</span></p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <CampoTexto label="Motorização" value={detalhes.motorizacao} onChange={(v) => setDetalhes({ ...detalhes, motorizacao: v })} />
+              <CampoNumero label="Capacidade (pessoas)" value={detalhes.capacidade_pessoas} onChange={(v) => setDetalhes({ ...detalhes, capacidade_pessoas: v })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <CampoNumero label="Calado (m)" value={detalhes.calado} onChange={(v) => setDetalhes({ ...detalhes, calado: v })} />
+              <CampoNumero label="Boca (m)" value={detalhes.boca} onChange={(v) => setDetalhes({ ...detalhes, boca: v })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <CampoTexto label="Tipo de casco" value={detalhes.tipo_casco} onChange={(v) => setDetalhes({ ...detalhes, tipo_casco: v })} />
+              <CampoTexto label="Combustível" value={detalhes.combustivel} onChange={(v) => setDetalhes({ ...detalhes, combustivel: v })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <CampoTexto label="Marina" value={detalhes.marina} onChange={(v) => setDetalhes({ ...detalhes, marina: v })} />
+              <CampoTexto label="Vaga" value={detalhes.vaga} onChange={(v) => setDetalhes({ ...detalhes, vaga: v })} />
+            </div>
+            <CampoTexto label="Cidade" value={detalhes.cidade} onChange={(v) => setDetalhes({ ...detalhes, cidade: v })} />
+            <div className="grid grid-cols-2 gap-4">
+              <CampoTexto label="Número TIE" value={detalhes.numero_tie} onChange={(v) => setDetalhes({ ...detalhes, numero_tie: v })} />
+              <CampoTexto label="Seguradora" value={detalhes.seguradora} onChange={(v) => setDetalhes({ ...detalhes, seguradora: v })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <CampoTexto label="Apólice de seguro" value={detalhes.apolice_seguro} onChange={(v) => setDetalhes({ ...detalhes, apolice_seguro: v })} />
+              <CampoData label="Vistoria válida até" value={detalhes.vistoria_validade} onChange={(v) => setDetalhes({ ...detalhes, vistoria_validade: v })} />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={salvarDetalhes}
+                disabled={salvandoDetalhes}
+                className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+              >
+                {salvandoDetalhes ? 'Salvando…' : 'Salvar'}
+              </button>
+              <button onClick={() => setEditandoDetalhes(false)} className="rounded-md px-4 py-2 text-sm text-slate-500 hover:text-slate-900">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-4 font-display text-lg text-slate-900">Documentos</h2>
+        {embarcacao.documentos.length === 0 ? (
+          <p className="mb-4 text-sm text-slate-400">Nenhum documento enviado ainda.</p>
+        ) : (
+          <ul className="mb-4 space-y-2">
+            {embarcacao.documentos.map((doc, i) => (
+              <li key={i}>
+                <button onClick={() => abrirMidia(doc.path)} className="text-sm text-tide-600 hover:text-tide-700 hover:underline">
+                  {doc.nome_arquivo}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <label className="inline-block cursor-pointer rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:border-tide-500">
+          {enviandoMidia ? 'Enviando…' : 'Enviar documento'}
+          <input
+            type="file"
+            className="hidden"
+            disabled={enviandoMidia}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleUploadMidia(file, 'documentos')
+            }}
+          />
+        </label>
+      </section>
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-4 font-display text-lg text-slate-900">Fotos</h2>
+        {embarcacao.fotos.length === 0 ? (
+          <p className="mb-4 text-sm text-slate-400">Nenhuma foto enviada ainda.</p>
+        ) : (
+          <ul className="mb-4 space-y-2">
+            {embarcacao.fotos.map((foto, i) => (
+              <li key={i}>
+                <button onClick={() => abrirMidia(foto.path)} className="text-sm text-tide-600 hover:text-tide-700 hover:underline">
+                  {foto.nome_arquivo}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <label className="inline-block cursor-pointer rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:border-tide-500">
+          {enviandoMidia ? 'Enviando…' : 'Enviar foto'}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={enviandoMidia}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleUploadMidia(file, 'fotos')
+            }}
+          />
+        </label>
+      </section>
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-4 font-display text-lg text-slate-900">Tripulação</h2>
+        {tripulacao.length === 0 ? (
+          <p className="mb-4 text-sm text-slate-400">Nenhum marinheiro vinculado ainda.</p>
+        ) : (
+          <div className="mb-4 space-y-2">
+            {tripulacao.map((t) => (
+              <div key={t.id} className="flex items-center justify-between rounded-md border border-slate-200 p-3 text-sm">
+                <div>
+                  <p className="font-medium text-slate-900">{t.marinheiro_nome}</p>
+                  {t.funcao && <p className="text-xs text-slate-500">{t.funcao}</p>}
+                </div>
+                <button onClick={() => desvincularTripulante(t.id)} className="text-xs text-red-600 hover:text-red-700">
+                  Remover
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {marinheirosNaoVinculados.length > 0 && (
+          <div className="flex items-end gap-2 border-t border-slate-200 pt-4">
+            <div className="flex-1">
+              <CampoSelect
+                label="Marinheiro"
+                value={marinheiroSelecionado}
+                onChange={setMarinheiroSelecionado}
+                options={[
+                  { value: '', label: 'Selecione…' },
+                  ...marinheirosNaoVinculados.map((m) => ({ value: m.id, label: m.nome })),
+                ]}
+              />
+            </div>
+            <div className="flex-1">
+              <CampoTexto label="Função (opcional)" value={funcaoTripulante} onChange={setFuncaoTripulante} placeholder="ex: Comandante" />
+            </div>
+            <button
+              onClick={vincularTripulante}
+              disabled={!marinheiroSelecionado}
+              className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+            >
+              Vincular
+            </button>
+          </div>
+        )}
+      </section>
 
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
         <div className="mb-4 flex items-center justify-between">
