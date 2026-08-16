@@ -15,22 +15,22 @@ export async function cadastrarPrestador(dados: {
   cpf_cnpj: string
   telefone: string
 }): Promise<void> {
-  const { data: authData, error: authError } = await supabase.auth.signUp({
+  // A linha em `prestadores` é criada por um trigger no banco (on_auth_user_created),
+  // a partir de raw_user_meta_data — não por um insert daqui. Isso evita depender de uma
+  // sessão ativa logo após o signUp, que não existe quando confirmação de e-mail está ligada.
+  const { error: authError } = await supabase.auth.signUp({
     email: dados.email,
     password: dados.senha,
+    options: {
+      data: {
+        tipo_pessoa: dados.tipo_pessoa,
+        nome: dados.nome,
+        cpf_cnpj: dados.cpf_cnpj,
+        telefone: dados.telefone,
+      },
+    },
   })
   if (authError) throw authError
-  if (!authData.user) throw new Error('Não foi possível criar o usuário.')
-
-  const { error: insertError } = await supabase.from('prestadores').insert({
-    id: authData.user.id,
-    tipo_pessoa: dados.tipo_pessoa,
-    nome: dados.nome,
-    cpf_cnpj: dados.cpf_cnpj || null,
-    telefone: dados.telefone || null,
-    email: dados.email,
-  })
-  if (insertError) throw insertError
 }
 
 export async function getMeuPrestador(): Promise<Prestador | null> {
