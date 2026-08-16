@@ -1,0 +1,334 @@
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { mensagemErro } from '@/lib/errors'
+import { CampoTexto, CampoSelect, CampoData, CampoNumero } from '@/components/campos'
+import {
+  getEmbarcacao,
+  listEquipamentos,
+  createEquipamento,
+  deleteEquipamento,
+  listTags,
+  createTag,
+  listChamadosDaEmbarcacao,
+  atualizarStatusChamado,
+} from '@/lib/api'
+import type { CategoriaEquipamento, Chamado, Embarcacao, EmbarcacaoTag, EquipamentoEmbarcado, StatusChamado } from '@/types'
+
+const CATEGORIA_LABELS: Record<CategoriaEquipamento, string> = {
+  MOTOR: 'Motor',
+  GERADOR: 'Gerador',
+  AR_CONDICIONADO: 'Ar condicionado',
+  ACESSORIO: 'Acessório',
+}
+
+const STATUS_LABELS: Record<StatusChamado, string> = {
+  aberto: 'Aberto',
+  em_andamento: 'Em andamento',
+  concluido: 'Concluído',
+}
+
+const STATUS_STYLES: Record<StatusChamado, string> = {
+  aberto: 'bg-amber-100 text-amber-700',
+  em_andamento: 'bg-tide-100 text-tide-700',
+  concluido: 'bg-emerald-100 text-emerald-700',
+}
+
+const EQUIPAMENTO_VAZIO = {
+  categoria: 'MOTOR' as CategoriaEquipamento,
+  nome: '',
+  marca: '',
+  modelo: '',
+  numero_serie: '',
+  instalado_em: '',
+  data_venda: '',
+  prazo_garantia_meses: null as number | null,
+}
+
+const BASE_URL_TAG = `${window.location.origin}${import.meta.env.BASE_URL}b/`
+
+export default function EmbarcacaoFicha() {
+  const { id } = useParams<{ id: string }>()
+  const [embarcacao, setEmbarcacao] = useState<Embarcacao | null>(null)
+  const [equipamentos, setEquipamentos] = useState<EquipamentoEmbarcado[]>([])
+  const [tags, setTags] = useState<EmbarcacaoTag[]>([])
+  const [chamados, setChamados] = useState<Chamado[]>([])
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const [adicionandoEquipamento, setAdicionandoEquipamento] = useState(false)
+  const [formEquipamento, setFormEquipamento] = useState(EQUIPAMENTO_VAZIO)
+
+  const [adicionandoTag, setAdicionandoTag] = useState(false)
+  const [novoTagId, setNovoTagId] = useState('')
+
+  async function carregar() {
+    if (!id) return
+    setCarregando(true)
+    try {
+      const [emb, eq, tg, ch] = await Promise.all([
+        getEmbarcacao(id),
+        listEquipamentos(id),
+        listTags(id),
+        listChamadosDaEmbarcacao(id),
+      ])
+      setEmbarcacao(emb)
+      setEquipamentos(eq)
+      setTags(tg)
+      setChamados(ch)
+      setErro(null)
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao carregar embarcação'))
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  useEffect(() => {
+    carregar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  async function salvarEquipamento() {
+    if (!id) return
+    try {
+      await createEquipamento({
+        embarcacao_id: id,
+        categoria: formEquipamento.categoria,
+        nome: formEquipamento.nome,
+        marca: formEquipamento.marca || null,
+        modelo: formEquipamento.modelo || null,
+        numero_serie: formEquipamento.numero_serie || null,
+        instalado_em: formEquipamento.instalado_em || null,
+        data_venda: formEquipamento.data_venda || null,
+        prazo_garantia_meses: formEquipamento.prazo_garantia_meses,
+      })
+      setFormEquipamento(EQUIPAMENTO_VAZIO)
+      setAdicionandoEquipamento(false)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao adicionar equipamento'))
+    }
+  }
+
+  async function removerEquipamento(equipamentoId: string) {
+    if (!confirm('Remover este equipamento?')) return
+    try {
+      await deleteEquipamento(equipamentoId)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao remover equipamento'))
+    }
+  }
+
+  async function salvarTag() {
+    if (!id || !novoTagId.trim()) return
+    try {
+      await createTag({ embarcacao_id: id, tag_id: novoTagId.trim(), modelo_nfc: 'NTAG213', modo_gravacao: 'HUB' })
+      setNovoTagId('')
+      setAdicionandoTag(false)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao criar tag'))
+    }
+  }
+
+  async function mudarStatusChamado(chamadoId: string, status: StatusChamado) {
+    try {
+      await atualizarStatusChamado(chamadoId, status)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao atualizar chamado'))
+    }
+  }
+
+  if (carregando) return <p className="p-8 text-sm text-slate-400">Carregando…</p>
+  if (!embarcacao) return <p className="p-8 text-sm text-slate-400">Embarcação não encontrada.</p>
+
+  return (
+    <div className="mx-auto max-w-3xl p-8">
+      <Link to="/embarcacoes" className="mb-4 inline-block text-sm text-slate-500 hover:text-slate-900">
+        ← Minhas embarcações
+      </Link>
+      <header className="mb-8">
+        <p className="text-[11px] uppercase tracking-[0.18em] text-tide-600">Ficha completa</p>
+        <h1 className="font-display text-3xl text-slate-900">{embarcacao.nome}</h1>
+        <p className="text-sm text-slate-500">Cliente: {embarcacao.cliente_nome}</p>
+      </header>
+
+      {erro && (
+        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {erro}
+        </div>
+      )}
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-display text-lg text-slate-900">Equipamentos</h2>
+          {!adicionandoEquipamento && (
+            <button onClick={() => setAdicionandoEquipamento(true)} className="text-sm font-medium text-tide-600 hover:text-tide-700">
+              + Adicionar
+            </button>
+          )}
+        </div>
+
+        {equipamentos.length === 0 && !adicionandoEquipamento && (
+          <p className="text-sm text-slate-400">Nenhum equipamento cadastrado ainda.</p>
+        )}
+
+        <div className="space-y-3">
+          {equipamentos.map((eq) => (
+            <div key={eq.id} className="rounded-md border border-slate-200 p-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">
+                    {CATEGORIA_LABELS[eq.categoria]} — {eq.nome}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {[eq.marca, eq.modelo].filter(Boolean).join(' ') || '—'}
+                  </p>
+                  {eq.garantia_vence_em && (
+                    <p className="text-xs text-slate-500">Garantia até: {eq.garantia_vence_em}</p>
+                  )}
+                </div>
+                <button onClick={() => removerEquipamento(eq.id)} className="text-xs text-red-600 hover:text-red-700">
+                  Remover
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {adicionandoEquipamento && (
+          <div className="mt-4 space-y-4 border-t border-slate-200 pt-4">
+            <CampoSelect
+              label="Categoria"
+              value={formEquipamento.categoria}
+              onChange={(v) => setFormEquipamento({ ...formEquipamento, categoria: v as CategoriaEquipamento })}
+              options={Object.entries(CATEGORIA_LABELS).map(([value, label]) => ({ value, label }))}
+            />
+            <CampoTexto label="Nome" value={formEquipamento.nome} onChange={(v) => setFormEquipamento({ ...formEquipamento, nome: v })} required />
+            <div className="grid grid-cols-2 gap-4">
+              <CampoTexto label="Marca" value={formEquipamento.marca} onChange={(v) => setFormEquipamento({ ...formEquipamento, marca: v })} />
+              <CampoTexto label="Modelo" value={formEquipamento.modelo} onChange={(v) => setFormEquipamento({ ...formEquipamento, modelo: v })} />
+            </div>
+            <CampoTexto label="Número de série" value={formEquipamento.numero_serie} onChange={(v) => setFormEquipamento({ ...formEquipamento, numero_serie: v })} />
+            <div className="grid grid-cols-2 gap-4">
+              <CampoData label="Data da venda/instalação" value={formEquipamento.data_venda} onChange={(v) => setFormEquipamento({ ...formEquipamento, data_venda: v })} />
+              <CampoNumero
+                label="Garantia (meses)"
+                value={formEquipamento.prazo_garantia_meses}
+                onChange={(v) => setFormEquipamento({ ...formEquipamento, prazo_garantia_meses: v })}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={salvarEquipamento}
+                disabled={!formEquipamento.nome.trim()}
+                className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+              >
+                Adicionar
+              </button>
+              <button onClick={() => setAdicionandoEquipamento(false)} className="rounded-md px-4 py-2 text-sm text-slate-500 hover:text-slate-900">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-display text-lg text-slate-900">Tags NFC</h2>
+          {!adicionandoTag && (
+            <button onClick={() => setAdicionandoTag(true)} className="text-sm font-medium text-tide-600 hover:text-tide-700">
+              + Nova tag
+            </button>
+          )}
+        </div>
+
+        {tags.length === 0 && !adicionandoTag && <p className="text-sm text-slate-400">Nenhuma tag gravada ainda.</p>}
+
+        <div className="space-y-2">
+          {tags.map((tag) => (
+            <div key={tag.id} className="flex items-center justify-between rounded-md border border-slate-200 p-3 text-sm">
+              <div>
+                <p className="font-medium text-slate-900">{tag.tag_id}</p>
+                <p className="text-xs text-slate-500">{BASE_URL_TAG}{tag.tag_id}</p>
+              </div>
+              <span className="text-xs text-slate-400">{tag.contagem_leituras} leituras</span>
+            </div>
+          ))}
+        </div>
+
+        {adicionandoTag && (
+          <div className="mt-4 space-y-4 border-t border-slate-200 pt-4">
+            <CampoTexto label="Código físico da tag" value={novoTagId} onChange={setNovoTagId} placeholder="ex: barco-nome-01" />
+            <p className="text-xs text-slate-400">
+              Grave esta URL no chip: {BASE_URL_TAG}
+              {novoTagId || 'TAG-XXX'}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={salvarTag}
+                disabled={!novoTagId.trim()}
+                className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+              >
+                Salvar tag
+              </button>
+              <button onClick={() => setAdicionandoTag(false)} className="rounded-md px-4 py-2 text-sm text-slate-500 hover:text-slate-900">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-4 font-display text-lg text-slate-900">Chamados</h2>
+        {chamados.length === 0 ? (
+          <p className="text-sm text-slate-400">Nenhum chamado registrado ainda.</p>
+        ) : (
+          <div className="space-y-3">
+            {chamados.map((c) => (
+              <div key={c.id} className="rounded-md border border-slate-200 p-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[c.status]}`}>
+                        {STATUS_LABELS[c.status]}
+                      </span>
+                      {c.tipo === 'garantia' && (
+                        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+                          Garantia
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-900">{c.descricao}</p>
+                  </div>
+                  {c.status !== 'concluido' && (
+                    <div className="flex gap-2">
+                      {c.status === 'aberto' && (
+                        <button
+                          onClick={() => mudarStatusChamado(c.id, 'em_andamento')}
+                          className="text-xs font-medium text-tide-600 hover:text-tide-700"
+                        >
+                          Iniciar
+                        </button>
+                      )}
+                      <button
+                        onClick={() => mudarStatusChamado(c.id, 'concluido')}
+                        className="text-xs font-medium text-emerald-600 hover:text-emerald-700"
+                      >
+                        Concluir
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}

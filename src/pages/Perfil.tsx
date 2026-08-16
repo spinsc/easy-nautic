@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { mensagemErro } from '@/lib/errors'
 import { CampoTexto, CampoSelect } from '@/components/campos'
@@ -95,6 +96,10 @@ export default function Perfil() {
     (c) => !minhasCategorias.some((mc) => mc.categoria_servico_id === c.id)
   )
 
+  const ehEstaleiro = minhasCategorias.some(
+    (mc) => categorias.find((c) => c.id === mc.categoria_servico_id)?.nome === 'Estaleiro'
+  )
+
   async function adicionarCategoria() {
     if (!prestador || !categoriaSelecionada) return
     try {
@@ -166,12 +171,22 @@ export default function Perfil() {
             {STATUS_LABELS[prestador.status_verificacao]}
           </span>
         </div>
-        <button
-          onClick={() => supabase.auth.signOut()}
-          className="text-sm text-slate-500 hover:text-slate-900"
-        >
-          Sair
-        </button>
+        <div className="flex items-center gap-4">
+          {ehEstaleiro && (
+            <Link to="/embarcacoes" className="text-sm text-slate-500 hover:text-slate-900">
+              Embarcações
+            </Link>
+          )}
+          <Link to="/chamados" className="text-sm text-slate-500 hover:text-slate-900">
+            Chamados
+          </Link>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="text-sm text-slate-500 hover:text-slate-900"
+          >
+            Sair
+          </button>
+        </div>
       </header>
 
       {erro && (

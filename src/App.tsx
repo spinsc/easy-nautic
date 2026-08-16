@@ -6,6 +6,10 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import Cadastro from './pages/Cadastro'
 import Perfil from './pages/Perfil'
+import Embarcacoes from './pages/Embarcacoes'
+import EmbarcacaoFicha from './pages/EmbarcacaoFicha'
+import EmbarcacaoPublica from './pages/EmbarcacaoPublica'
+import Chamados from './pages/Chamados'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -30,9 +34,13 @@ export default function App() {
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/b/:tagId" element={<EmbarcacaoPublica />} />
         <Route path="/login" element={session ? <Navigate to="/perfil" /> : <Login />} />
         <Route path="/cadastro" element={session ? <Navigate to="/perfil" /> : <Cadastro />} />
         <Route path="/perfil" element={session ? <Perfil /> : <Navigate to="/login" />} />
+        <Route path="/embarcacoes" element={session ? <Embarcacoes /> : <Navigate to="/login" />} />
+        <Route path="/embarcacoes/:id" element={session ? <EmbarcacaoFicha /> : <Navigate to="/login" />} />
+        <Route path="/chamados" element={session ? <Chamados /> : <Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
   )
