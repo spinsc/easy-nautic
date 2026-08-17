@@ -29,11 +29,17 @@ import {
   resolverDisputa,
   uploadEvidenciaChamado,
   getUrlEvidencia,
+  listPerguntasDoChamado,
+  responderPergunta,
+  listVisitasDoChamado,
+  atualizarStatusVisita,
 } from '@/lib/api'
 import type {
   CategoriaEquipamento,
   Chamado,
+  ChamadoPergunta,
   ChamadoRejeicao,
+  ChamadoVisita,
   Cotacao,
   DocumentoVerificacao,
   Embarcacao,
@@ -79,6 +85,13 @@ const STATUS_COTACAO_STYLES: Record<Cotacao['status'], string> = {
   aprovada: 'bg-tide-100 text-tide-700',
   rejeitada: 'bg-red-100 text-red-700',
   paga: 'bg-emerald-100 text-emerald-700',
+}
+
+const STATUS_VISITA_LABELS: Record<ChamadoVisita['status'], string> = {
+  solicitada: 'Aguardando resposta',
+  autorizada: 'Autorizada',
+  recusada: 'Recusada',
+  realizada: 'Realizada',
 }
 
 const EQUIPAMENTO_VAZIO = {
@@ -153,6 +166,14 @@ export default function EmbarcacaoFicha() {
   const [evidenciasRejeicao, setEvidenciasRejeicao] = useState<DocumentoVerificacao[]>([])
   const [enviandoEvidencia, setEnviandoEvidencia] = useState(false)
 
+  const [perguntasPorChamado, setPerguntasPorChamado] = useState<Record<string, (ChamadoPergunta & { prestador_nome: string })[]>>({})
+  const [respondendoId, setRespondendoId] = useState<string | null>(null)
+  const [resposta, setResposta] = useState('')
+
+  const [visitasPorChamado, setVisitasPorChamado] = useState<Record<string, (ChamadoVisita & { prestador_nome: string })[]>>({})
+  const [recusandoVisitaId, setRecusandoVisitaId] = useState<string | null>(null)
+  const [motivoRecusaVisita, setMotivoRecusaVisita] = useState('')
+
   async function carregar() {
     if (!id) return
     setCarregando(true)
@@ -178,6 +199,10 @@ export default function EmbarcacaoFicha() {
         ch.filter((c) => c.status === 'em_disputa').map(async (c) => [c.id, await listRejeicoesDoChamado(c.id)] as const)
       )
       setRejeicoesPorChamado(Object.fromEntries(rejeicoesEntries))
+      const perguntasEntries = await Promise.all(ch.map(async (c) => [c.id, await listPerguntasDoChamado(c.id)] as const))
+      setPerguntasPorChamado(Object.fromEntries(perguntasEntries))
+      const visitasEntries = await Promise.all(ch.map(async (c) => [c.id, await listVisitasDoChamado(c.id)] as const))
+      setVisitasPorChamado(Object.fromEntries(visitasEntries))
       if (emb) {
         setDetalhes({
           motorizacao: emb.motorizacao ?? '',
@@ -309,6 +334,39 @@ export default function EmbarcacaoFicha() {
       await carregar()
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao resolver disputa'))
+    }
+  }
+
+  async function enviarResposta(perguntaId: string) {
+    if (!meuPrestadorId || !resposta.trim()) return
+    try {
+      await responderPergunta(perguntaId, resposta.trim(), meuPrestadorId)
+      setResposta('')
+      setRespondendoId(null)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao responder pergunta'))
+    }
+  }
+
+  async function autorizarVisita(id: string) {
+    try {
+      await atualizarStatusVisita(id, 'autorizada')
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao autorizar visita'))
+    }
+  }
+
+  async function recusarVisita(id: string) {
+    if (!motivoRecusaVisita.trim()) return
+    try {
+      await atualizarStatusVisita(id, 'recusada', motivoRecusaVisita.trim())
+      setRecusandoVisitaId(null)
+      setMotivoRecusaVisita('')
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao recusar visita'))
     }
   }
 
@@ -931,6 +989,82 @@ export default function EmbarcacaoFicha() {
                                 {ev.nome_arquivo}
                               </button>
                             ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(perguntasPorChamado[c.id]?.length ?? 0) > 0 && (
+                  <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Dúvidas</p>
+                    {perguntasPorChamado[c.id].map((p) => (
+                      <div key={p.id} className="rounded-md bg-slate-50 p-2 text-xs">
+                        <p className="text-slate-900">
+                          <span className="font-medium">{p.prestador_nome}:</span> {p.pergunta}
+                        </p>
+                        {p.resposta ? (
+                          <p className="mt-1 text-slate-600">Resposta: {p.resposta}</p>
+                        ) : respondendoId === p.id ? (
+                          <div className="mt-2 space-y-2">
+                            <CampoTexto label="Resposta" value={resposta} onChange={setResposta} />
+                            <div className="flex gap-2">
+                              <button onClick={() => enviarResposta(p.id)} disabled={!resposta.trim()} className="font-medium text-tide-600 hover:text-tide-700 disabled:opacity-50">
+                                Enviar
+                              </button>
+                              <button onClick={() => setRespondendoId(null)} className="text-slate-500 hover:text-slate-900">
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setRespondendoId(p.id)
+                              setResposta('')
+                            }}
+                            className="mt-1 font-medium text-tide-600 hover:text-tide-700"
+                          >
+                            Responder
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(visitasPorChamado[c.id]?.length ?? 0) > 0 && (
+                  <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Visita a bordo</p>
+                    {visitasPorChamado[c.id].map((v) => (
+                      <div key={v.id} className="rounded-md bg-slate-50 p-2 text-xs">
+                        <p className="text-slate-900">
+                          <span className="font-medium">{v.prestador_nome}</span> — {new Date(v.data_sugerida).toLocaleString('pt-BR')} —{' '}
+                          {STATUS_VISITA_LABELS[v.status]}
+                        </p>
+                        {v.motivo_recusa && <p className="mt-1 text-slate-500">Motivo: {v.motivo_recusa}</p>}
+                        {v.status === 'solicitada' && recusandoVisitaId !== v.id && (
+                          <div className="mt-2 flex gap-2">
+                            <button onClick={() => autorizarVisita(v.id)} className="font-medium text-tide-600 hover:text-tide-700">
+                              Autorizar
+                            </button>
+                            <button onClick={() => setRecusandoVisitaId(v.id)} className="font-medium text-red-600 hover:text-red-700">
+                              Recusar
+                            </button>
+                          </div>
+                        )}
+                        {recusandoVisitaId === v.id && (
+                          <div className="mt-2 space-y-2">
+                            <CampoTexto label="Motivo da recusa" value={motivoRecusaVisita} onChange={setMotivoRecusaVisita} />
+                            <div className="flex gap-2">
+                              <button onClick={() => recusarVisita(v.id)} disabled={!motivoRecusaVisita.trim()} className="font-medium text-red-600 hover:text-red-700 disabled:opacity-50">
+                                Confirmar recusa
+                              </button>
+                              <button onClick={() => setRecusandoVisitaId(null)} className="text-slate-500 hover:text-slate-900">
+                                Cancelar
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>

@@ -166,6 +166,31 @@ export interface Cotacao {
   pago_por: string | null
 }
 
+export interface ChamadoPergunta {
+  id: string
+  chamado_id: string
+  prestador_id: string
+  pergunta: string
+  resposta: string | null
+  respondido_por: string | null
+  criado_em: string
+  respondido_em: string | null
+}
+
+export type StatusVisita = 'solicitada' | 'autorizada' | 'recusada' | 'realizada'
+
+export interface ChamadoVisita {
+  id: string
+  chamado_id: string
+  prestador_id: string
+  data_sugerida: string
+  status: StatusVisita
+  motivo_recusa: string | null
+  criado_em: string
+  respondido_em: string | null
+  respondido_por: string | null
+}
+
 export interface EmbarcacaoPublicaData {
   embarcacao: {
     id: string

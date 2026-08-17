@@ -2,7 +2,9 @@ import { supabase } from './supabase'
 import type {
   CategoriaServico,
   Chamado,
+  ChamadoPergunta,
   ChamadoRejeicao,
+  ChamadoVisita,
   Cotacao,
   DocumentoVerificacao,
   Embarcacao,
@@ -15,6 +17,7 @@ import type {
   PrestadorCategoria,
   StatusCotacao,
   StatusVerificacao,
+  StatusVisita,
   TipoPessoa,
 } from '@/types'
 
@@ -406,6 +409,63 @@ export async function resolverDisputa(chamadoId: string, status: 'em_andamento' 
   const patch: Partial<Chamado> = { status }
   if (status === 'concluido') patch.concluido_em = new Date().toISOString()
   const { error } = await supabase.from('chamados').update(patch).eq('id', chamadoId)
+  if (error) throw error
+}
+
+// ---------- Perguntas sobre o chamado ----------
+
+export async function listPerguntasDoChamado(chamadoId: string): Promise<(ChamadoPergunta & { prestador_nome: string })[]> {
+  const { data, error } = await supabase
+    .from('chamado_perguntas')
+    .select('*, prestadores(nome)')
+    .eq('chamado_id', chamadoId)
+    .order('criado_em')
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const { prestadores, ...p } = row as unknown as ChamadoPergunta & { prestadores: { nome: string } | null }
+    return { ...p, prestador_nome: prestadores?.nome ?? '—' }
+  })
+}
+
+export async function perguntarSobreChamado(chamadoId: string, prestadorId: string, pergunta: string): Promise<void> {
+  const { error } = await supabase.from('chamado_perguntas').insert({ chamado_id: chamadoId, prestador_id: prestadorId, pergunta })
+  if (error) throw error
+}
+
+export async function responderPergunta(id: string, resposta: string, respondidoPor: string): Promise<void> {
+  const { error } = await supabase
+    .from('chamado_perguntas')
+    .update({ resposta, respondido_por: respondidoPor, respondido_em: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+// ---------- Visita a bordo ----------
+
+export async function listVisitasDoChamado(chamadoId: string): Promise<(ChamadoVisita & { prestador_nome: string })[]> {
+  const { data, error } = await supabase
+    .from('chamado_visitas')
+    .select('*, prestadores(nome)')
+    .eq('chamado_id', chamadoId)
+    .order('criado_em', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const { prestadores, ...v } = row as unknown as ChamadoVisita & { prestadores: { nome: string } | null }
+    return { ...v, prestador_nome: prestadores?.nome ?? '—' }
+  })
+}
+
+export async function solicitarVisita(chamadoId: string, prestadorId: string, dataSugerida: string): Promise<void> {
+  const { error } = await supabase
+    .from('chamado_visitas')
+    .insert({ chamado_id: chamadoId, prestador_id: prestadorId, data_sugerida: dataSugerida })
+  if (error) throw error
+}
+
+export async function atualizarStatusVisita(id: string, status: StatusVisita, motivoRecusa?: string): Promise<void> {
+  const patch: Partial<ChamadoVisita> = { status }
+  if (motivoRecusa) patch.motivo_recusa = motivoRecusa
+  const { error } = await supabase.from('chamado_visitas').update(patch).eq('id', id)
   if (error) throw error
 }
 
