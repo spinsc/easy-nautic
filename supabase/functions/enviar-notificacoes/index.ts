@@ -77,10 +77,13 @@ ${row.motivo ? `<p style="color:#666">${row.motivo}</p>` : ''}
           .eq('id', row.id)
         enviados++
       } else {
+        const corpo = await res.text()
+        console.error('Resend falhou', res.status, corpo)
         await supabase.from('chamado_notificacoes').update({ status: 'falhou' }).eq('id', row.id)
         falharam++
       }
-    } catch {
+    } catch (e) {
+      console.error('Erro ao enviar', e)
       await supabase.from('chamado_notificacoes').update({ status: 'falhou' }).eq('id', row.id)
       falharam++
     }
