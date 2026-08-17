@@ -13,8 +13,17 @@ import {
   uploadDocumentoPrestador,
   getUrlDocumentoPrestador,
   souAdmin,
+  listMarcas,
+  listMinhasMarcas,
+  addMinhaMarca,
+  removeMinhaMarca,
+  listEstados,
+  listCidadesPorEstado,
+  listMinhasRegioes,
+  addMinhaRegiao,
+  removeMinhaRegiao,
 } from '@/lib/api'
-import type { CategoriaServico, Prestador, PrestadorCategoria, StatusVerificacao } from '@/types'
+import type { CategoriaServico, Cidade, Estado, Marca, Prestador, PrestadorCategoria, StatusVerificacao } from '@/types'
 
 const STATUS_LABELS: Record<StatusVerificacao, string> = {
   pendente: 'Pendente de verificação',
@@ -68,6 +77,16 @@ export default function Perfil() {
   const [condicaoPagamentoPadrao, setCondicaoPagamentoPadrao] = useState('')
   const [salvandoCondicaoPagamento, setSalvandoCondicaoPagamento] = useState(false)
 
+  const [marcasCatalogo, setMarcasCatalogo] = useState<Marca[]>([])
+  const [minhasMarcas, setMinhasMarcas] = useState<(Marca & { prestador_marca_id: string })[]>([])
+  const [marcaSelecionada, setMarcaSelecionada] = useState('')
+
+  const [estados, setEstados] = useState<Estado[]>([])
+  const [minhasRegioes, setMinhasRegioes] = useState<(Cidade & { prestador_regiao_id: string; sigla_estado: string })[]>([])
+  const [estadoSelecionado, setEstadoSelecionado] = useState('')
+  const [cidadesDoEstado, setCidadesDoEstado] = useState<Cidade[]>([])
+  const [cidadeSelecionada, setCidadeSelecionada] = useState('')
+
   async function carregar() {
     setCarregando(true)
     try {
@@ -77,14 +96,22 @@ export default function Perfil() {
         setNome(p.nome)
         setTelefone(p.telefone ?? '')
         setCondicaoPagamentoPadrao(p.condicao_pagamento_padrao ?? '')
-        const [cats, minhas, admin] = await Promise.all([
+        const [cats, minhas, admin, catalogoMarcas, marcasProprias, listaEstados, regioesProprias] = await Promise.all([
           listCategoriasServico(),
           listPrestadorCategorias(p.id),
           souAdmin(),
+          listMarcas(),
+          listMinhasMarcas(p.id),
+          listEstados(),
+          listMinhasRegioes(p.id),
         ])
         setCategorias(cats)
         setMinhasCategorias(minhas)
         setEhAdmin(admin)
+        setMarcasCatalogo(catalogoMarcas)
+        setMinhasMarcas(marcasProprias)
+        setEstados(listaEstados)
+        setMinhasRegioes(regioesProprias)
       }
       setErro(null)
     } catch (e) {
@@ -115,6 +142,62 @@ export default function Perfil() {
   const categoriasDisponiveis = categorias.filter(
     (c) => !minhasCategorias.some((mc) => mc.categoria_servico_id === c.id)
   )
+
+  const marcasDisponiveis = marcasCatalogo.filter((m) => !minhasMarcas.some((mm) => mm.id === m.id))
+
+  async function adicionarMarca() {
+    if (!prestador || !marcaSelecionada) return
+    try {
+      await addMinhaMarca(prestador.id, marcaSelecionada)
+      setMarcaSelecionada('')
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao adicionar marca'))
+    }
+  }
+
+  async function removerMarca(id: string) {
+    try {
+      await removeMinhaMarca(id)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao remover marca'))
+    }
+  }
+
+  async function onEstadoSelecionado(estadoId: string) {
+    setEstadoSelecionado(estadoId)
+    setCidadeSelecionada('')
+    if (!estadoId) {
+      setCidadesDoEstado([])
+      return
+    }
+    try {
+      setCidadesDoEstado(await listCidadesPorEstado(Number(estadoId)))
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao carregar cidades'))
+    }
+  }
+
+  async function adicionarRegiao() {
+    if (!prestador || !cidadeSelecionada) return
+    try {
+      await addMinhaRegiao(prestador.id, Number(cidadeSelecionada))
+      setCidadeSelecionada('')
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao adicionar região'))
+    }
+  }
+
+  async function removerRegiao(id: string) {
+    try {
+      await removeMinhaRegiao(id)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao remover região'))
+    }
+  }
 
   async function adicionarCategoria() {
     if (!prestador || !categoriaSelecionada) return
@@ -390,6 +473,91 @@ export default function Perfil() {
             </div>
           </div>
         )}
+      </section>
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-1 font-display text-lg text-slate-900">Marcas que atende</h2>
+        <p className="mb-4 text-xs text-slate-400">
+          Usadas pra você aparecer nas solicitações de serviço de embarcações com equipamentos dessas marcas.
+        </p>
+        {minhasMarcas.length === 0 && (
+          <p className="mb-3 text-sm text-slate-400">Nenhuma marca cadastrada ainda.</p>
+        )}
+        <div className="mb-4 flex flex-wrap gap-2">
+          {minhasMarcas.map((m) => (
+            <span key={m.id} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+              {m.nome}
+              <button onClick={() => removerMarca(m.prestador_marca_id)} className="text-red-600 hover:text-red-700">
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        {marcasDisponiveis.length > 0 && (
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <CampoSelect
+                label="Adicionar marca"
+                value={marcaSelecionada}
+                onChange={setMarcaSelecionada}
+                options={[{ value: '', label: 'Selecione…' }, ...marcasDisponiveis.map((m) => ({ value: m.id, label: m.nome }))]}
+              />
+            </div>
+            <button
+              onClick={adicionarMarca}
+              disabled={!marcaSelecionada}
+              className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+            >
+              Adicionar
+            </button>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-1 font-display text-lg text-slate-900">Regiões de atendimento</h2>
+        <p className="mb-4 text-xs text-slate-400">Cidades onde você atende presencialmente.</p>
+        {minhasRegioes.length === 0 && (
+          <p className="mb-3 text-sm text-slate-400">Nenhuma região cadastrada ainda.</p>
+        )}
+        <div className="mb-4 flex flex-wrap gap-2">
+          {minhasRegioes.map((r) => (
+            <span key={r.id} className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+              {r.nome} — {r.sigla_estado}
+              <button onClick={() => removerRegiao(r.prestador_regiao_id)} className="text-red-600 hover:text-red-700">
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <CampoSelect
+            label="Estado"
+            value={estadoSelecionado}
+            onChange={onEstadoSelecionado}
+            options={[{ value: '', label: 'Selecione…' }, ...estados.map((e) => ({ value: String(e.id), label: e.nome }))]}
+          />
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <CampoSelect
+                label="Cidade"
+                value={cidadeSelecionada}
+                onChange={setCidadeSelecionada}
+                options={[
+                  { value: '', label: estadoSelecionado ? 'Selecione…' : 'Escolha um estado antes' },
+                  ...cidadesDoEstado.map((c) => ({ value: String(c.id), label: c.nome })),
+                ]}
+              />
+            </div>
+            <button
+              onClick={adicionarRegiao}
+              disabled={!cidadeSelecionada}
+              className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+            >
+              Adicionar
+            </button>
+          </div>
+        </div>
       </section>
 
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">

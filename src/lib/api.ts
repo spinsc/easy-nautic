@@ -5,6 +5,7 @@ import type {
   ChamadoPergunta,
   ChamadoRejeicao,
   ChamadoVisita,
+  Cidade,
   Cotacao,
   DocumentoVerificacao,
   Embarcacao,
@@ -12,13 +13,16 @@ import type {
   EmbarcacaoTag,
   EmbarcacaoTripulante,
   EquipamentoEmbarcado,
+  Estado,
   FormaPagamento,
+  Marca,
   Prestador,
   PrestadorCategoria,
   StatusCotacao,
   StatusVerificacao,
   StatusVisita,
   TipoPessoa,
+  TipoServico,
 } from '@/types'
 
 export async function listCategoriasServico(): Promise<CategoriaServico[]> {
@@ -114,6 +118,82 @@ export async function getUrlDocumentoPrestador(path: string): Promise<string> {
     .createSignedUrl(path, 60 * 10)
   if (error) throw error
   return data.signedUrl
+}
+
+// ---------- Catálogos (marcas, regiões, tipos de serviço) ----------
+
+export async function listEstados(): Promise<Estado[]> {
+  const { data, error } = await supabase.from('estados').select('*').order('nome')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function listCidadesPorEstado(estadoId: number): Promise<Cidade[]> {
+  const { data, error } = await supabase.from('cidades').select('*').eq('estado_id', estadoId).order('nome')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getCidade(cidadeId: number): Promise<Cidade | null> {
+  const { data, error } = await supabase.from('cidades').select('*').eq('id', cidadeId).maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function listMarcas(): Promise<Marca[]> {
+  const { data, error } = await supabase.from('marcas').select('*').order('nome')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function listTiposServico(categoriaServicoId?: string): Promise<TipoServico[]> {
+  let query = supabase.from('tipos_servico').select('*').order('ordem')
+  if (categoriaServicoId) query = query.eq('categoria_servico_id', categoriaServicoId)
+  const { data, error } = await query
+  if (error) throw error
+  return data ?? []
+}
+
+export async function listMinhasMarcas(prestadorId: string): Promise<(Marca & { prestador_marca_id: string })[]> {
+  const { data, error } = await supabase.from('prestador_marcas').select('id, marcas(*)').eq('prestador_id', prestadorId)
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const m = row.marcas as unknown as Marca
+    return { ...m, prestador_marca_id: row.id as string }
+  })
+}
+
+export async function addMinhaMarca(prestadorId: string, marcaId: string): Promise<void> {
+  const { error } = await supabase.from('prestador_marcas').insert({ prestador_id: prestadorId, marca_id: marcaId })
+  if (error) throw error
+}
+
+export async function removeMinhaMarca(id: string): Promise<void> {
+  const { error } = await supabase.from('prestador_marcas').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listMinhasRegioes(prestadorId: string): Promise<(Cidade & { prestador_regiao_id: string; sigla_estado: string })[]> {
+  const { data, error } = await supabase
+    .from('prestador_regioes')
+    .select('id, cidades(*, estados(sigla))')
+    .eq('prestador_id', prestadorId)
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const c = row.cidades as unknown as Cidade & { estados: { sigla: string } | null }
+    const { estados, ...cidade } = c
+    return { ...cidade, prestador_regiao_id: row.id as string, sigla_estado: estados?.sigla ?? '' }
+  })
+}
+
+export async function addMinhaRegiao(prestadorId: string, cidadeId: number): Promise<void> {
+  const { error } = await supabase.from('prestador_regioes').insert({ prestador_id: prestadorId, cidade_id: cidadeId })
+  if (error) throw error
+}
+
+export async function removeMinhaRegiao(id: string): Promise<void> {
+  const { error } = await supabase.from('prestador_regioes').delete().eq('id', id)
+  if (error) throw error
 }
 
 // ---------- Embarcações (Fase 2 — módulo de garantia) ----------

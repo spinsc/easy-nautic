@@ -33,6 +33,10 @@ import {
   responderPergunta,
   listVisitasDoChamado,
   atualizarStatusVisita,
+  listMarcas,
+  listEstados,
+  listCidadesPorEstado,
+  getCidade,
 } from '@/lib/api'
 import type {
   CategoriaEquipamento,
@@ -40,9 +44,12 @@ import type {
   ChamadoPergunta,
   ChamadoRejeicao,
   ChamadoVisita,
+  Cidade,
   Cotacao,
   DocumentoVerificacao,
   Embarcacao,
+  Estado,
+  Marca,
   EmbarcacaoTag,
   EmbarcacaoTripulante,
   EquipamentoEmbarcado,
@@ -97,7 +104,7 @@ const STATUS_VISITA_LABELS: Record<ChamadoVisita['status'], string> = {
 const EQUIPAMENTO_VAZIO = {
   categoria: 'MOTOR' as CategoriaEquipamento,
   nome: '',
-  marca: '',
+  marca_id: '',
   modelo: '',
   numero_serie: '',
   instalado_em: '',
@@ -114,7 +121,6 @@ const DETALHES_VAZIO = {
   combustivel: '',
   marina: '',
   vaga: '',
-  cidade: '',
   numero_tie: '',
   seguradora: '',
   apolice_seguro: '',
@@ -145,6 +151,12 @@ export default function EmbarcacaoFicha() {
   const [editandoDetalhes, setEditandoDetalhes] = useState(false)
   const [detalhes, setDetalhes] = useState(DETALHES_VAZIO)
   const [salvandoDetalhes, setSalvandoDetalhes] = useState(false)
+
+  const [marcasCatalogo, setMarcasCatalogo] = useState<Marca[]>([])
+  const [estados, setEstados] = useState<Estado[]>([])
+  const [estadoSelecionado, setEstadoSelecionado] = useState('')
+  const [cidadesDoEstado, setCidadesDoEstado] = useState<Cidade[]>([])
+  const [cidadeSelecionada, setCidadeSelecionada] = useState('')
 
   const [enviandoMidia, setEnviandoMidia] = useState(false)
 
@@ -178,7 +190,7 @@ export default function EmbarcacaoFicha() {
     if (!id) return
     setCarregando(true)
     try {
-      const [emb, eq, tg, ch, trip, cats, meuPrestador] = await Promise.all([
+      const [emb, eq, tg, ch, trip, cats, meuPrestador, catalogoMarcas, listaEstados] = await Promise.all([
         getEmbarcacao(id),
         listEquipamentos(id),
         listTags(id),
@@ -186,7 +198,11 @@ export default function EmbarcacaoFicha() {
         listTripulacao(id),
         listCategoriasServico(),
         getMeuPrestador(),
+        listMarcas(),
+        listEstados(),
       ])
+      setMarcasCatalogo(catalogoMarcas)
+      setEstados(listaEstados)
       setEmbarcacao(emb)
       setEquipamentos(eq)
       setTags(tg)
@@ -213,12 +229,19 @@ export default function EmbarcacaoFicha() {
           combustivel: emb.combustivel ?? '',
           marina: emb.marina ?? '',
           vaga: emb.vaga ?? '',
-          cidade: emb.cidade ?? '',
           numero_tie: emb.numero_tie ?? '',
           seguradora: emb.seguradora ?? '',
           apolice_seguro: emb.apolice_seguro ?? '',
           vistoria_validade: emb.vistoria_validade ?? '',
         })
+        if (emb.cidade_id) {
+          const cidade = await getCidade(emb.cidade_id)
+          if (cidade) {
+            setEstadoSelecionado(String(cidade.estado_id))
+            setCidadesDoEstado(await listCidadesPorEstado(cidade.estado_id))
+            setCidadeSelecionada(String(emb.cidade_id))
+          }
+        }
       }
       const categoriaMarinheiro = cats.find((c) => c.nome === 'Marinheiro')
       if (categoriaMarinheiro) {
@@ -244,7 +267,8 @@ export default function EmbarcacaoFicha() {
         embarcacao_id: id,
         categoria: formEquipamento.categoria,
         nome: formEquipamento.nome,
-        marca: formEquipamento.marca || null,
+        marca: marcasCatalogo.find((m) => m.id === formEquipamento.marca_id)?.nome ?? null,
+        marca_id: formEquipamento.marca_id || null,
         modelo: formEquipamento.modelo || null,
         numero_serie: formEquipamento.numero_serie || null,
         instalado_em: formEquipamento.instalado_em || null,
@@ -370,6 +394,20 @@ export default function EmbarcacaoFicha() {
     }
   }
 
+  async function onEstadoSelecionado(estadoId: string) {
+    setEstadoSelecionado(estadoId)
+    setCidadeSelecionada('')
+    if (!estadoId) {
+      setCidadesDoEstado([])
+      return
+    }
+    try {
+      setCidadesDoEstado(await listCidadesPorEstado(Number(estadoId)))
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao carregar cidades'))
+    }
+  }
+
   async function salvarDetalhes() {
     if (!id) return
     setSalvandoDetalhes(true)
@@ -383,7 +421,8 @@ export default function EmbarcacaoFicha() {
         combustivel: detalhes.combustivel || null,
         marina: detalhes.marina || null,
         vaga: detalhes.vaga || null,
-        cidade: detalhes.cidade || null,
+        cidade: cidadesDoEstado.find((c) => String(c.id) === cidadeSelecionada)?.nome ?? null,
+        cidade_id: cidadeSelecionada ? Number(cidadeSelecionada) : null,
         numero_tie: detalhes.numero_tie || null,
         seguradora: detalhes.seguradora || null,
         apolice_seguro: detalhes.apolice_seguro || null,
@@ -547,7 +586,23 @@ export default function EmbarcacaoFicha() {
               <CampoTexto label="Marina" value={detalhes.marina} onChange={(v) => setDetalhes({ ...detalhes, marina: v })} />
               <CampoTexto label="Vaga" value={detalhes.vaga} onChange={(v) => setDetalhes({ ...detalhes, vaga: v })} />
             </div>
-            <CampoTexto label="Cidade" value={detalhes.cidade} onChange={(v) => setDetalhes({ ...detalhes, cidade: v })} />
+            <div className="grid grid-cols-2 gap-4">
+              <CampoSelect
+                label="Estado"
+                value={estadoSelecionado}
+                onChange={onEstadoSelecionado}
+                options={[{ value: '', label: 'Selecione…' }, ...estados.map((e) => ({ value: String(e.id), label: e.nome }))]}
+              />
+              <CampoSelect
+                label="Cidade"
+                value={cidadeSelecionada}
+                onChange={setCidadeSelecionada}
+                options={[
+                  { value: '', label: estadoSelecionado ? 'Selecione…' : 'Escolha um estado antes' },
+                  ...cidadesDoEstado.map((c) => ({ value: String(c.id), label: c.nome })),
+                ]}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <CampoTexto label="Número TIE" value={detalhes.numero_tie} onChange={(v) => setDetalhes({ ...detalhes, numero_tie: v })} />
               <CampoTexto label="Seguradora" value={detalhes.seguradora} onChange={(v) => setDetalhes({ ...detalhes, seguradora: v })} />
@@ -763,7 +818,12 @@ export default function EmbarcacaoFicha() {
             />
             <CampoTexto label="Nome" value={formEquipamento.nome} onChange={(v) => setFormEquipamento({ ...formEquipamento, nome: v })} required />
             <div className="grid grid-cols-2 gap-4">
-              <CampoTexto label="Marca" value={formEquipamento.marca} onChange={(v) => setFormEquipamento({ ...formEquipamento, marca: v })} />
+              <CampoSelect
+                label="Marca"
+                value={formEquipamento.marca_id}
+                onChange={(v) => setFormEquipamento({ ...formEquipamento, marca_id: v })}
+                options={[{ value: '', label: 'Selecione…' }, ...marcasCatalogo.map((m) => ({ value: m.id, label: m.nome }))]}
+              />
               <CampoTexto label="Modelo" value={formEquipamento.modelo} onChange={(v) => setFormEquipamento({ ...formEquipamento, modelo: v })} />
             </div>
             <CampoTexto label="Número de série" value={formEquipamento.numero_serie} onChange={(v) => setFormEquipamento({ ...formEquipamento, numero_serie: v })} />

@@ -8,6 +8,45 @@ export interface CategoriaServico {
   ordem: number
 }
 
+export interface Estado {
+  id: number
+  sigla: string
+  nome: string
+}
+
+export interface Cidade {
+  id: number
+  nome: string
+  estado_id: number
+}
+
+export interface Marca {
+  id: string
+  nome: string
+  criado_em: string
+}
+
+export interface TipoServico {
+  id: string
+  categoria_servico_id: string | null
+  nome: string
+  ordem: number
+}
+
+export interface PrestadorMarca {
+  id: string
+  prestador_id: string
+  marca_id: string
+  criado_em: string
+}
+
+export interface PrestadorRegiao {
+  id: string
+  prestador_id: string
+  cidade_id: number
+  criado_em: string
+}
+
 export interface DocumentoVerificacao {
   path: string
   nome_arquivo: string
@@ -78,6 +117,7 @@ export interface Embarcacao {
   marina: string | null
   vaga: string | null
   cidade: string | null
+  cidade_id: number | null
   numero_tie: string | null
   seguradora: string | null
   apolice_seguro: string | null
@@ -106,6 +146,7 @@ export interface EquipamentoEmbarcado {
   categoria: CategoriaEquipamento
   nome: string
   marca: string | null
+  marca_id: string | null
   modelo: string | null
   numero_serie: string | null
   instalado_em: string | null

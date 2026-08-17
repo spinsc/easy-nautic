@@ -7,9 +7,11 @@ import {
   getMeuPrestador,
   listCategoriasServico,
   listPrestadorCategorias,
+  listEstados,
+  listCidadesPorEstado,
 } from '@/lib/api'
 import { CampoTexto, CampoNumero, CampoData, CampoSelect } from '@/components/campos'
-import type { Embarcacao } from '@/types'
+import type { Cidade, Embarcacao, Estado } from '@/types'
 
 const EMBARCACAO_VAZIA = {
   cliente_nome: '',
@@ -31,7 +33,6 @@ const EMBARCACAO_VAZIA = {
   combustivel: '',
   marina: '',
   vaga: '',
-  cidade: '',
 }
 
 export default function Embarcacoes() {
@@ -43,12 +44,17 @@ export default function Embarcacoes() {
   const [form, setForm] = useState(EMBARCACAO_VAZIA)
   const [ehEstaleiro, setEhEstaleiro] = useState(false)
   const [modo, setModo] = useState<'proprietario' | 'estaleiro'>('proprietario')
+  const [estados, setEstados] = useState<Estado[]>([])
+  const [estadoSelecionado, setEstadoSelecionado] = useState('')
+  const [cidadesDoEstado, setCidadesDoEstado] = useState<Cidade[]>([])
+  const [cidadeSelecionada, setCidadeSelecionada] = useState('')
 
   async function carregar() {
     setCarregando(true)
     try {
-      const [lista, prestador] = await Promise.all([listMinhasEmbarcacoes(), getMeuPrestador()])
+      const [lista, prestador, listaEstados] = await Promise.all([listMinhasEmbarcacoes(), getMeuPrestador(), listEstados()])
       setItens(lista)
+      setEstados(listaEstados)
       if (prestador) {
         const [cats, minhas] = await Promise.all([listCategoriasServico(), listPrestadorCategorias(prestador.id)])
         setEhEstaleiro(minhas.some((mc) => cats.find((c) => c.id === mc.categoria_servico_id)?.nome === 'Estaleiro'))
@@ -64,6 +70,20 @@ export default function Embarcacoes() {
   useEffect(() => {
     carregar()
   }, [])
+
+  async function onEstadoSelecionado(estadoId: string) {
+    setEstadoSelecionado(estadoId)
+    setCidadeSelecionada('')
+    if (!estadoId) {
+      setCidadesDoEstado([])
+      return
+    }
+    try {
+      setCidadesDoEstado(await listCidadesPorEstado(Number(estadoId)))
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao carregar cidades'))
+    }
+  }
 
   async function salvar() {
     setSalvando(true)
@@ -93,13 +113,17 @@ export default function Embarcacoes() {
         combustivel: form.combustivel || null,
         marina: form.marina || null,
         vaga: form.vaga || null,
-        cidade: form.cidade || null,
+        cidade: cidadesDoEstado.find((c) => String(c.id) === cidadeSelecionada)?.nome ?? null,
+        cidade_id: cidadeSelecionada ? Number(cidadeSelecionada) : null,
         numero_tie: null,
         seguradora: null,
         apolice_seguro: null,
         vistoria_validade: null,
       })
       setForm(EMBARCACAO_VAZIA)
+      setEstadoSelecionado('')
+      setCidadeSelecionada('')
+      setCidadesDoEstado([])
       setCriando(false)
       await carregar()
     } catch (e) {
@@ -241,7 +265,23 @@ export default function Embarcacoes() {
                     <CampoTexto label="Marina" value={form.marina} onChange={(v) => setForm({ ...form, marina: v })} />
                     <CampoTexto label="Vaga" value={form.vaga} onChange={(v) => setForm({ ...form, vaga: v })} />
                   </div>
-                  <CampoTexto label="Cidade" value={form.cidade} onChange={(v) => setForm({ ...form, cidade: v })} />
+                  <div className="grid grid-cols-2 gap-4">
+                    <CampoSelect
+                      label="Estado"
+                      value={estadoSelecionado}
+                      onChange={onEstadoSelecionado}
+                      options={[{ value: '', label: 'Selecione…' }, ...estados.map((e) => ({ value: String(e.id), label: e.nome }))]}
+                    />
+                    <CampoSelect
+                      label="Cidade"
+                      value={cidadeSelecionada}
+                      onChange={setCidadeSelecionada}
+                      options={[
+                        { value: '', label: estadoSelecionado ? 'Selecione…' : 'Escolha um estado antes' },
+                        ...cidadesDoEstado.map((c) => ({ value: String(c.id), label: c.nome })),
+                      ]}
+                    />
+                  </div>
                 </div>
               </div>
 
