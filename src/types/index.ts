@@ -180,6 +180,19 @@ export interface Chamado {
   concluido_em: string | null
 }
 
+export type StatusNotificacao = 'pendente' | 'enviado' | 'falhou'
+
+export interface ChamadoNotificacao {
+  id: string
+  chamado_id: string
+  prestador_id: string
+  motivo: string | null
+  canal: 'email' | 'push'
+  status: StatusNotificacao
+  criado_em: string
+  enviado_em: string | null
+}
+
 export interface ChamadoRejeicao {
   id: string
   chamado_id: string

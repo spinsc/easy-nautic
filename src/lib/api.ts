@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import type {
   CategoriaServico,
   Chamado,
+  ChamadoNotificacao,
   ChamadoPergunta,
   ChamadoRejeicao,
   ChamadoVisita,
@@ -547,6 +548,20 @@ export async function atualizarStatusVisita(id: string, status: StatusVisita, mo
   if (motivoRecusa) patch.motivo_recusa = motivoRecusa
   const { error } = await supabase.from('chamado_visitas').update(patch).eq('id', id)
   if (error) throw error
+}
+
+export async function listNotificacoesDoChamado(
+  chamadoId: string
+): Promise<(ChamadoNotificacao & { prestador_nome: string })[]> {
+  const { data, error } = await supabase
+    .from('chamado_notificacoes')
+    .select('*, prestadores(nome)')
+    .eq('chamado_id', chamadoId)
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const { prestadores, ...n } = row as unknown as ChamadoNotificacao & { prestadores: { nome: string } | null }
+    return { ...n, prestador_nome: prestadores?.nome ?? '—' }
+  })
 }
 
 // ---------- Cotações (proposta de valor de um prestador pra um chamado) ----------

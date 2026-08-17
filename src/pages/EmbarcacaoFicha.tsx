@@ -37,10 +37,12 @@ import {
   listEstados,
   listCidadesPorEstado,
   getCidade,
+  listNotificacoesDoChamado,
 } from '@/lib/api'
 import type {
   CategoriaEquipamento,
   Chamado,
+  ChamadoNotificacao,
   ChamadoPergunta,
   ChamadoRejeicao,
   ChamadoVisita,
@@ -138,6 +140,7 @@ export default function EmbarcacaoFicha() {
   const [tripulacao, setTripulacao] = useState<(EmbarcacaoTripulante & { marinheiro_nome: string })[]>([])
   const [marinheirosDisponiveis, setMarinheirosDisponiveis] = useState<Prestador[]>([])
   const [cotacoesPorChamado, setCotacoesPorChamado] = useState<Record<string, (Cotacao & { prestador_nome: string })[]>>({})
+  const [notificacoesPorChamado, setNotificacoesPorChamado] = useState<Record<string, (ChamadoNotificacao & { prestador_nome: string })[]>>({})
   const [meuPrestadorId, setMeuPrestadorId] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -211,6 +214,8 @@ export default function EmbarcacaoFicha() {
       setMeuPrestadorId(meuPrestador?.id ?? null)
       const cotacoesEntries = await Promise.all(ch.map(async (c) => [c.id, await listCotacoesDoChamado(c.id)] as const))
       setCotacoesPorChamado(Object.fromEntries(cotacoesEntries))
+      const notificacoesEntries = await Promise.all(ch.map(async (c) => [c.id, await listNotificacoesDoChamado(c.id)] as const))
+      setNotificacoesPorChamado(Object.fromEntries(notificacoesEntries))
       const rejeicoesEntries = await Promise.all(
         ch.filter((c) => c.status === 'em_disputa').map(async (c) => [c.id, await listRejeicoesDoChamado(c.id)] as const)
       )
@@ -1129,6 +1134,15 @@ export default function EmbarcacaoFicha() {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {(notificacoesPorChamado[c.id]?.length ?? 0) > 0 && (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <p className="text-xs text-slate-400">
+                      {notificacoesPorChamado[c.id].length} prestador(es) notificado(s) automaticamente:{' '}
+                      {notificacoesPorChamado[c.id].map((n) => n.prestador_nome).join(', ')}
+                    </p>
                   </div>
                 )}
 
