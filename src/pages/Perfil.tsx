@@ -62,6 +62,10 @@ export default function Perfil() {
   const [enviandoDocumento, setEnviandoDocumento] = useState(false)
   const [ehAdmin, setEhAdmin] = useState(false)
 
+  const [adicionandoPagamento, setAdicionandoPagamento] = useState(false)
+  const [tipoPagamento, setTipoPagamento] = useState('')
+  const [dadosPagamento, setDadosPagamento] = useState('')
+
   async function carregar() {
     setCarregando(true)
     try {
@@ -165,6 +169,33 @@ export default function Perfil() {
       setErro(mensagemErro(e, 'Erro ao enviar documento'))
     } finally {
       setEnviandoDocumento(false)
+    }
+  }
+
+  async function adicionarFormaPagamento() {
+    if (!prestador || !tipoPagamento.trim() || !dadosPagamento.trim()) return
+    try {
+      await updatePrestador(prestador.id, {
+        formas_pagamento: [...prestador.formas_pagamento, { tipo: tipoPagamento.trim(), dados: dadosPagamento.trim() }],
+      })
+      setTipoPagamento('')
+      setDadosPagamento('')
+      setAdicionandoPagamento(false)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao adicionar forma de pagamento'))
+    }
+  }
+
+  async function removerFormaPagamento(index: number) {
+    if (!prestador) return
+    try {
+      await updatePrestador(prestador.id, {
+        formas_pagamento: prestador.formas_pagamento.filter((_, i) => i !== index),
+      })
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao remover forma de pagamento'))
     }
   }
 
@@ -338,6 +369,60 @@ export default function Perfil() {
                 onClick={() => setAdicionandoCategoria(false)}
                 className="rounded-md px-4 py-2 text-sm text-slate-500 hover:text-slate-900"
               >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-display text-lg text-slate-900">Formas de pagamento</h2>
+          {!adicionandoPagamento && (
+            <button
+              onClick={() => setAdicionandoPagamento(true)}
+              className="text-sm font-medium text-tide-600 hover:text-tide-700"
+            >
+              + Adicionar
+            </button>
+          )}
+        </div>
+        <p className="mb-4 text-xs text-slate-400">
+          Usadas por padrão nas suas cotações — você pode especificar outra forma em cada cotação, se preferir.
+        </p>
+
+        {prestador.formas_pagamento.length === 0 && !adicionandoPagamento && (
+          <p className="text-sm text-slate-400">Nenhuma forma de pagamento cadastrada ainda.</p>
+        )}
+
+        <div className="space-y-2">
+          {prestador.formas_pagamento.map((fp, i) => (
+            <div key={i} className="flex items-center justify-between rounded-md border border-slate-200 p-3 text-sm">
+              <div>
+                <p className="font-medium text-slate-900">{fp.tipo}</p>
+                <p className="text-xs text-slate-500">{fp.dados}</p>
+              </div>
+              <button onClick={() => removerFormaPagamento(i)} className="text-xs text-red-600 hover:text-red-700">
+                Remover
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {adicionandoPagamento && (
+          <div className="mt-4 space-y-4 border-t border-slate-200 pt-4">
+            <CampoTexto label="Tipo" value={tipoPagamento} onChange={setTipoPagamento} placeholder="ex: Pix, Transferência, Boleto" />
+            <CampoTexto label="Dados" value={dadosPagamento} onChange={setDadosPagamento} placeholder="ex: chave pix, dados bancários" />
+            <div className="flex gap-2">
+              <button
+                onClick={adicionarFormaPagamento}
+                disabled={!tipoPagamento.trim() || !dadosPagamento.trim()}
+                className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+              >
+                Adicionar
+              </button>
+              <button onClick={() => setAdicionandoPagamento(false)} className="rounded-md px-4 py-2 text-sm text-slate-500 hover:text-slate-900">
                 Cancelar
               </button>
             </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { mensagemErro } from '@/lib/errors'
-import { CampoTexto, CampoSelect, CampoData, CampoNumero } from '@/components/campos'
+import { CampoTexto, CampoSelect, CampoData, CampoNumero, CampoCheckbox } from '@/components/campos'
 import {
   getEmbarcacao,
   updateEmbarcacao,
@@ -16,13 +16,19 @@ import {
   getUrlMidiaEmbarcacao,
   listTripulacao,
   addTripulante,
+  updateTripulante,
   removeTripulante,
   listPrestadoresPorCategoria,
   listCategoriasServico,
+  listCotacoesDoChamado,
+  atualizarStatusCotacao,
+  getMeuPrestador,
+  criarChamado,
 } from '@/lib/api'
 import type {
   CategoriaEquipamento,
   Chamado,
+  Cotacao,
   Embarcacao,
   EmbarcacaoTag,
   EmbarcacaoTripulante,
@@ -48,6 +54,20 @@ const STATUS_STYLES: Record<StatusChamado, string> = {
   aberto: 'bg-amber-100 text-amber-700',
   em_andamento: 'bg-tide-100 text-tide-700',
   concluido: 'bg-emerald-100 text-emerald-700',
+}
+
+const STATUS_COTACAO_LABELS: Record<Cotacao['status'], string> = {
+  pendente: 'Pendente',
+  aprovada: 'Aprovada',
+  rejeitada: 'Rejeitada',
+  paga: 'Paga',
+}
+
+const STATUS_COTACAO_STYLES: Record<Cotacao['status'], string> = {
+  pendente: 'bg-amber-100 text-amber-700',
+  aprovada: 'bg-tide-100 text-tide-700',
+  rejeitada: 'bg-red-100 text-red-700',
+  paga: 'bg-emerald-100 text-emerald-700',
 }
 
 const EQUIPAMENTO_VAZIO = {
@@ -87,6 +107,8 @@ export default function EmbarcacaoFicha() {
   const [chamados, setChamados] = useState<Chamado[]>([])
   const [tripulacao, setTripulacao] = useState<(EmbarcacaoTripulante & { marinheiro_nome: string })[]>([])
   const [marinheirosDisponiveis, setMarinheirosDisponiveis] = useState<Prestador[]>([])
+  const [cotacoesPorChamado, setCotacoesPorChamado] = useState<Record<string, (Cotacao & { prestador_nome: string })[]>>({})
+  const [meuPrestadorId, setMeuPrestadorId] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -104,24 +126,37 @@ export default function EmbarcacaoFicha() {
 
   const [marinheiroSelecionado, setMarinheiroSelecionado] = useState('')
   const [funcaoTripulante, setFuncaoTripulante] = useState('')
+  const [permissoesTripulante, setPermissoesTripulante] = useState({
+    pode_solicitar: true,
+    pode_aprovar: false,
+    pode_pagar: false,
+  })
+
+  const [abrindoChamado, setAbrindoChamado] = useState(false)
+  const [descricaoChamado, setDescricaoChamado] = useState('')
+  const [equipamentoChamado, setEquipamentoChamado] = useState('')
 
   async function carregar() {
     if (!id) return
     setCarregando(true)
     try {
-      const [emb, eq, tg, ch, trip, cats] = await Promise.all([
+      const [emb, eq, tg, ch, trip, cats, meuPrestador] = await Promise.all([
         getEmbarcacao(id),
         listEquipamentos(id),
         listTags(id),
         listChamadosDaEmbarcacao(id),
         listTripulacao(id),
         listCategoriasServico(),
+        getMeuPrestador(),
       ])
       setEmbarcacao(emb)
       setEquipamentos(eq)
       setTags(tg)
       setChamados(ch)
       setTripulacao(trip)
+      setMeuPrestadorId(meuPrestador?.id ?? null)
+      const cotacoesEntries = await Promise.all(ch.map(async (c) => [c.id, await listCotacoesDoChamado(c.id)] as const))
+      setCotacoesPorChamado(Object.fromEntries(cotacoesEntries))
       if (emb) {
         setDetalhes({
           motorizacao: emb.motorizacao ?? '',
@@ -263,9 +298,10 @@ export default function EmbarcacaoFicha() {
   async function vincularTripulante() {
     if (!id || !marinheiroSelecionado) return
     try {
-      await addTripulante(id, marinheiroSelecionado, funcaoTripulante || null)
+      await addTripulante(id, marinheiroSelecionado, funcaoTripulante || null, permissoesTripulante)
       setMarinheiroSelecionado('')
       setFuncaoTripulante('')
+      setPermissoesTripulante({ pode_solicitar: true, pode_aprovar: false, pode_pagar: false })
       await carregar()
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao vincular marinheiro'))
@@ -278,6 +314,42 @@ export default function EmbarcacaoFicha() {
       await carregar()
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao remover tripulante'))
+    }
+  }
+
+  async function alterarPermissaoTripulante(
+    tripulanteId: string,
+    campo: 'pode_solicitar' | 'pode_aprovar' | 'pode_pagar',
+    valor: boolean
+  ) {
+    try {
+      await updateTripulante(tripulanteId, { [campo]: valor })
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao atualizar permissão'))
+    }
+  }
+
+  async function salvarChamado() {
+    if (!id || !descricaoChamado.trim()) return
+    try {
+      await criarChamado(id, descricaoChamado.trim(), equipamentoChamado || null)
+      setDescricaoChamado('')
+      setEquipamentoChamado('')
+      setAbrindoChamado(false)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao abrir chamado'))
+    }
+  }
+
+  async function mudarStatusCotacao(cotacaoId: string, status: Cotacao['status']) {
+    if (!meuPrestadorId) return
+    try {
+      await atualizarStatusCotacao(cotacaoId, status, meuPrestadorId)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao atualizar cotação'))
     }
   }
 
@@ -440,34 +512,72 @@ export default function EmbarcacaoFicha() {
         ) : (
           <div className="mb-4 space-y-2">
             {tripulacao.map((t) => (
-              <div key={t.id} className="flex items-center justify-between rounded-md border border-slate-200 p-3 text-sm">
-                <div>
-                  <p className="font-medium text-slate-900">{t.marinheiro_nome}</p>
-                  {t.funcao && <p className="text-xs text-slate-500">{t.funcao}</p>}
+              <div key={t.id} className="rounded-md border border-slate-200 p-3 text-sm">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-slate-900">{t.marinheiro_nome}</p>
+                    {t.funcao && <p className="text-xs text-slate-500">{t.funcao}</p>}
+                  </div>
+                  <button onClick={() => desvincularTripulante(t.id)} className="text-xs text-red-600 hover:text-red-700">
+                    Remover
+                  </button>
                 </div>
-                <button onClick={() => desvincularTripulante(t.id)} className="text-xs text-red-600 hover:text-red-700">
-                  Remover
-                </button>
+                <div className="flex flex-wrap gap-4 border-t border-slate-100 pt-2">
+                  <CampoCheckbox
+                    label="Pode solicitar"
+                    checked={t.pode_solicitar}
+                    onChange={(v) => alterarPermissaoTripulante(t.id, 'pode_solicitar', v)}
+                  />
+                  <CampoCheckbox
+                    label="Pode aprovar"
+                    checked={t.pode_aprovar}
+                    onChange={(v) => alterarPermissaoTripulante(t.id, 'pode_aprovar', v)}
+                  />
+                  <CampoCheckbox
+                    label="Pode pagar"
+                    checked={t.pode_pagar}
+                    onChange={(v) => alterarPermissaoTripulante(t.id, 'pode_pagar', v)}
+                  />
+                </div>
               </div>
             ))}
           </div>
         )}
 
         {marinheirosNaoVinculados.length > 0 && (
-          <div className="flex items-end gap-2 border-t border-slate-200 pt-4">
-            <div className="flex-1">
-              <CampoSelect
-                label="Marinheiro"
-                value={marinheiroSelecionado}
-                onChange={setMarinheiroSelecionado}
-                options={[
-                  { value: '', label: 'Selecione…' },
-                  ...marinheirosNaoVinculados.map((m) => ({ value: m.id, label: m.nome })),
-                ]}
-              />
+          <div className="space-y-4 border-t border-slate-200 pt-4">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <CampoSelect
+                  label="Marinheiro"
+                  value={marinheiroSelecionado}
+                  onChange={setMarinheiroSelecionado}
+                  options={[
+                    { value: '', label: 'Selecione…' },
+                    ...marinheirosNaoVinculados.map((m) => ({ value: m.id, label: m.nome })),
+                  ]}
+                />
+              </div>
+              <div className="flex-1">
+                <CampoTexto label="Função (opcional)" value={funcaoTripulante} onChange={setFuncaoTripulante} placeholder="ex: Comandante" />
+              </div>
             </div>
-            <div className="flex-1">
-              <CampoTexto label="Função (opcional)" value={funcaoTripulante} onChange={setFuncaoTripulante} placeholder="ex: Comandante" />
+            <div className="flex flex-wrap gap-4">
+              <CampoCheckbox
+                label="Pode solicitar serviços"
+                checked={permissoesTripulante.pode_solicitar}
+                onChange={(v) => setPermissoesTripulante({ ...permissoesTripulante, pode_solicitar: v })}
+              />
+              <CampoCheckbox
+                label="Pode aprovar cotações"
+                checked={permissoesTripulante.pode_aprovar}
+                onChange={(v) => setPermissoesTripulante({ ...permissoesTripulante, pode_aprovar: v })}
+              />
+              <CampoCheckbox
+                label="Pode marcar como pago"
+                checked={permissoesTripulante.pode_pagar}
+                onChange={(v) => setPermissoesTripulante({ ...permissoesTripulante, pode_pagar: v })}
+              />
             </div>
             <button
               onClick={vincularTripulante}
@@ -603,7 +713,44 @@ export default function EmbarcacaoFicha() {
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 font-display text-lg text-slate-900">Chamados</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-display text-lg text-slate-900">Chamados</h2>
+          {!abrindoChamado && (
+            <button onClick={() => setAbrindoChamado(true)} className="text-sm font-medium text-tide-600 hover:text-tide-700">
+              + Solicitar serviço
+            </button>
+          )}
+        </div>
+
+        {abrindoChamado && (
+          <div className="mb-4 space-y-4 rounded-md border border-slate-200 p-3">
+            {equipamentos.length > 0 && (
+              <CampoSelect
+                label="Sobre qual item? (opcional)"
+                value={equipamentoChamado}
+                onChange={setEquipamentoChamado}
+                options={[
+                  { value: '', label: 'Embarcação em geral' },
+                  ...equipamentos.map((eq) => ({ value: eq.id, label: `${CATEGORIA_LABELS[eq.categoria]} — ${eq.nome}` })),
+                ]}
+              />
+            )}
+            <CampoTexto label="Descreva o problema" value={descricaoChamado} onChange={setDescricaoChamado} />
+            <div className="flex gap-2">
+              <button
+                onClick={salvarChamado}
+                disabled={!descricaoChamado.trim()}
+                className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+              >
+                Enviar
+              </button>
+              <button onClick={() => setAbrindoChamado(false)} className="rounded-md px-4 py-2 text-sm text-slate-500 hover:text-slate-900">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
         {chamados.length === 0 ? (
           <p className="text-sm text-slate-400">Nenhum chamado registrado ainda.</p>
         ) : (
@@ -643,6 +790,54 @@ export default function EmbarcacaoFicha() {
                     </div>
                   )}
                 </div>
+
+                {(cotacoesPorChamado[c.id]?.length ?? 0) > 0 && (
+                  <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Cotações</p>
+                    {cotacoesPorChamado[c.id].map((cot) => (
+                      <div key={cot.id} className="rounded-md bg-slate-50 p-2 text-xs">
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="font-medium text-slate-900">
+                            {cot.prestador_nome} — R$ {cot.valor}
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 font-medium ${STATUS_COTACAO_STYLES[cot.status]}`}>
+                            {STATUS_COTACAO_LABELS[cot.status]}
+                          </span>
+                        </div>
+                        {cot.descricao && <p className="mb-1 text-slate-600">{cot.descricao}</p>}
+                        <p className="text-slate-500">
+                          Pagamento: {cot.forma_pagamento ? `${cot.forma_pagamento.tipo} — ${cot.forma_pagamento.dados}` : 'padrão do prestador'}
+                        </p>
+                        <div className="mt-2 flex gap-2">
+                          {cot.status === 'pendente' && (
+                            <>
+                              <button
+                                onClick={() => mudarStatusCotacao(cot.id, 'aprovada')}
+                                className="font-medium text-tide-600 hover:text-tide-700"
+                              >
+                                Aprovar
+                              </button>
+                              <button
+                                onClick={() => mudarStatusCotacao(cot.id, 'rejeitada')}
+                                className="font-medium text-red-600 hover:text-red-700"
+                              >
+                                Rejeitar
+                              </button>
+                            </>
+                          )}
+                          {cot.status === 'aprovada' && (
+                            <button
+                              onClick={() => mudarStatusCotacao(cot.id, 'paga')}
+                              className="font-medium text-emerald-600 hover:text-emerald-700"
+                            >
+                              Marcar como paga
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { mensagemErro } from '@/lib/errors'
-import { listMeusChamados, atualizarStatusChamado, getMeuPrestador } from '@/lib/api'
-import type { Chamado, StatusChamado } from '@/types'
+import { CampoTexto, CampoNumero, CampoCheckbox } from '@/components/campos'
+import { listMeusChamados, atualizarStatusChamado, getMeuPrestador, createCotacao } from '@/lib/api'
+import type { Chamado, Prestador, StatusChamado } from '@/types'
 
 const STATUS_LABELS: Record<StatusChamado, string> = {
   aberto: 'Aberto',
@@ -18,15 +19,23 @@ const STATUS_STYLES: Record<StatusChamado, string> = {
 
 export default function Chamados() {
   const [itens, setItens] = useState<(Chamado & { embarcacao_nome: string })[]>([])
+  const [prestador, setPrestador] = useState<Prestador | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
-  const [meuId, setMeuId] = useState<string | null>(null)
+  const [sucesso, setSucesso] = useState<string | null>(null)
+
+  const [cotandoId, setCotandoId] = useState<string | null>(null)
+  const [valorCotacao, setValorCotacao] = useState<number | null>(null)
+  const [descricaoCotacao, setDescricaoCotacao] = useState('')
+  const [usarFormaGlobal, setUsarFormaGlobal] = useState(true)
+  const [tipoPagamentoCustom, setTipoPagamentoCustom] = useState('')
+  const [dadosPagamentoCustom, setDadosPagamentoCustom] = useState('')
 
   async function carregar() {
     setCarregando(true)
     try {
       const [p, ch] = await Promise.all([getMeuPrestador(), listMeusChamados()])
-      setMeuId(p?.id ?? null)
+      setPrestador(p)
       setItens(ch)
       setErro(null)
     } catch (e) {
@@ -41,12 +50,39 @@ export default function Chamados() {
   }, [])
 
   async function mudarStatus(id: string, status: StatusChamado) {
-    if (!meuId) return
+    if (!prestador) return
     try {
-      await atualizarStatusChamado(id, status, meuId)
+      await atualizarStatusChamado(id, status, prestador.id)
       await carregar()
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao atualizar chamado'))
+    }
+  }
+
+  function iniciarCotacao(chamadoId: string) {
+    setCotandoId(chamadoId)
+    setValorCotacao(null)
+    setDescricaoCotacao('')
+    setUsarFormaGlobal(true)
+    setTipoPagamentoCustom('')
+    setDadosPagamentoCustom('')
+    setSucesso(null)
+  }
+
+  async function enviarCotacao() {
+    if (!prestador || !cotandoId || valorCotacao == null) return
+    try {
+      await createCotacao(
+        cotandoId,
+        prestador.id,
+        valorCotacao,
+        descricaoCotacao || null,
+        usarFormaGlobal ? null : { tipo: tipoPagamentoCustom, dados: dadosPagamentoCustom }
+      )
+      setCotandoId(null)
+      setSucesso('Cotação enviada.')
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao enviar cotação'))
     }
   }
 
@@ -65,6 +101,11 @@ export default function Chamados() {
       {erro && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {erro}
+        </div>
+      )}
+      {sucesso && (
+        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          {sucesso}
         </div>
       )}
 
@@ -110,9 +151,47 @@ export default function Chamados() {
                     >
                       Concluir
                     </button>
+                    {cotandoId !== c.id && (
+                      <button
+                        onClick={() => iniciarCotacao(c.id)}
+                        className="text-xs font-medium text-slate-500 hover:text-slate-900"
+                      >
+                        Cotar
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
+
+              {cotandoId === c.id && (
+                <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
+                  <CampoNumero label="Valor (R$)" value={valorCotacao} onChange={setValorCotacao} />
+                  <CampoTexto label="Observações (opcional)" value={descricaoCotacao} onChange={setDescricaoCotacao} />
+                  <CampoCheckbox
+                    label="Usar minha forma de pagamento cadastrada no perfil"
+                    checked={usarFormaGlobal}
+                    onChange={setUsarFormaGlobal}
+                  />
+                  {!usarFormaGlobal && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <CampoTexto label="Tipo" value={tipoPagamentoCustom} onChange={setTipoPagamentoCustom} placeholder="ex: Pix" />
+                      <CampoTexto label="Dados" value={dadosPagamentoCustom} onChange={setDadosPagamentoCustom} />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={enviarCotacao}
+                      disabled={valorCotacao == null}
+                      className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+                    >
+                      Enviar cotação
+                    </button>
+                    <button onClick={() => setCotandoId(null)} className="rounded-md px-4 py-2 text-sm text-slate-500 hover:text-slate-900">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

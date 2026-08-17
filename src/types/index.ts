@@ -13,6 +13,11 @@ export interface DocumentoVerificacao {
   nome_arquivo: string
 }
 
+export interface FormaPagamento {
+  tipo: string
+  dados: string
+}
+
 export interface Prestador {
   id: string
   tipo_pessoa: TipoPessoa
@@ -22,6 +27,7 @@ export interface Prestador {
   email: string | null
   status_verificacao: StatusVerificacao
   documentos_verificacao: DocumentoVerificacao[]
+  formas_pagamento: FormaPagamento[]
   avaliacao_media: number | null
   total_avaliacoes: number
   criado_em: string
@@ -87,6 +93,9 @@ export interface EmbarcacaoTripulante {
   embarcacao_id: string
   marinheiro_id: string
   funcao: string | null
+  pode_solicitar: boolean
+  pode_aprovar: boolean
+  pode_pagar: boolean
   criado_em: string
 }
 
@@ -126,6 +135,23 @@ export interface Chamado {
   atendido_por: string | null
   criado_em: string
   concluido_em: string | null
+}
+
+export type StatusCotacao = 'pendente' | 'aprovada' | 'rejeitada' | 'paga'
+
+export interface Cotacao {
+  id: string
+  chamado_id: string
+  prestador_id: string
+  valor: number
+  descricao: string | null
+  forma_pagamento: FormaPagamento | null
+  status: StatusCotacao
+  criado_em: string
+  aprovado_em: string | null
+  aprovado_por: string | null
+  pago_em: string | null
+  pago_por: string | null
 }
 
 export interface EmbarcacaoPublicaData {

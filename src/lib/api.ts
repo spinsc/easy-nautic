@@ -2,14 +2,17 @@ import { supabase } from './supabase'
 import type {
   CategoriaServico,
   Chamado,
+  Cotacao,
   DocumentoVerificacao,
   Embarcacao,
   EmbarcacaoPublicaData,
   EmbarcacaoTag,
   EmbarcacaoTripulante,
   EquipamentoEmbarcado,
+  FormaPagamento,
   Prestador,
   PrestadorCategoria,
+  StatusCotacao,
   StatusVerificacao,
   TipoPessoa,
 } from '@/types'
@@ -177,10 +180,23 @@ export async function listTripulacao(
   })
 }
 
-export async function addTripulante(embarcacaoId: string, marinheiroId: string, funcao: string | null): Promise<void> {
+export async function addTripulante(
+  embarcacaoId: string,
+  marinheiroId: string,
+  funcao: string | null,
+  permissoes: { pode_solicitar: boolean; pode_aprovar: boolean; pode_pagar: boolean }
+): Promise<void> {
   const { error } = await supabase
     .from('embarcacao_tripulantes')
-    .insert({ embarcacao_id: embarcacaoId, marinheiro_id: marinheiroId, funcao })
+    .insert({ embarcacao_id: embarcacaoId, marinheiro_id: marinheiroId, funcao, ...permissoes })
+  if (error) throw error
+}
+
+export async function updateTripulante(
+  id: string,
+  patch: Partial<Pick<EmbarcacaoTripulante, 'funcao' | 'pode_solicitar' | 'pode_aprovar' | 'pode_pagar'>>
+): Promise<void> {
+  const { error } = await supabase.from('embarcacao_tripulantes').update(patch).eq('id', id)
   if (error) throw error
 }
 
@@ -298,6 +314,17 @@ export async function listChamadosDaEmbarcacao(embarcacaoId: string): Promise<Ch
   return data ?? []
 }
 
+export async function criarChamado(
+  embarcacaoId: string,
+  descricao: string,
+  equipamentoId: string | null
+): Promise<void> {
+  const { error } = await supabase
+    .from('chamados')
+    .insert({ embarcacao_id: embarcacaoId, equipamento_id: equipamentoId, tipo: 'comercial', descricao })
+  if (error) throw error
+}
+
 export async function atualizarStatusChamado(
   id: string,
   status: Chamado['status'],
@@ -336,6 +363,60 @@ export async function listTodosChamadosAdmin(): Promise<(Chamado & { embarcacao_
     const { embarcacoes, ...chamado } = row as unknown as Chamado & { embarcacoes: { nome: string } | null }
     return { ...chamado, embarcacao_nome: embarcacoes?.nome ?? '—' }
   })
+}
+
+// ---------- Cotações (proposta de valor de um prestador pra um chamado) ----------
+
+export async function listCotacoesDoChamado(chamadoId: string): Promise<(Cotacao & { prestador_nome: string })[]> {
+  const { data, error } = await supabase
+    .from('cotacoes')
+    .select('*, prestadores(nome)')
+    .eq('chamado_id', chamadoId)
+    .order('criado_em', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const { prestadores, ...c } = row as unknown as Cotacao & { prestadores: { nome: string } | null }
+    return { ...c, prestador_nome: prestadores?.nome ?? '—' }
+  })
+}
+
+export async function listMinhasCotacoes(): Promise<Cotacao[]> {
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user) return []
+  const { data, error } = await supabase
+    .from('cotacoes')
+    .select('*')
+    .eq('prestador_id', userData.user.id)
+    .order('criado_em', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createCotacao(
+  chamadoId: string,
+  prestadorId: string,
+  valor: number,
+  descricao: string | null,
+  formaPagamento: FormaPagamento | null
+): Promise<void> {
+  const { error } = await supabase
+    .from('cotacoes')
+    .insert({ chamado_id: chamadoId, prestador_id: prestadorId, valor, descricao, forma_pagamento: formaPagamento })
+  if (error) throw error
+}
+
+export async function atualizarStatusCotacao(id: string, status: StatusCotacao, atorId: string): Promise<void> {
+  const patch: Partial<Cotacao> = { status }
+  if (status === 'aprovada') {
+    patch.aprovado_em = new Date().toISOString()
+    patch.aprovado_por = atorId
+  }
+  if (status === 'paga') {
+    patch.pago_em = new Date().toISOString()
+    patch.pago_por = atorId
+  }
+  const { error } = await supabase.from('cotacoes').update(patch).eq('id', id)
+  if (error) throw error
 }
 
 // ---------- Página pública por tag ----------
