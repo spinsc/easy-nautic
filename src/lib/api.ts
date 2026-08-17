@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import type {
   CategoriaServico,
   Chamado,
+  ChamadoRejeicao,
   Cotacao,
   DocumentoVerificacao,
   Embarcacao,
@@ -363,6 +364,49 @@ export async function listTodosChamadosAdmin(): Promise<(Chamado & { embarcacao_
     const { embarcacoes, ...chamado } = row as unknown as Chamado & { embarcacoes: { nome: string } | null }
     return { ...chamado, embarcacao_nome: embarcacoes?.nome ?? '—' }
   })
+}
+
+export async function uploadEvidenciaChamado(chamadoId: string, file: File): Promise<DocumentoVerificacao> {
+  const path = `${chamadoId}/${crypto.randomUUID()}-${file.name}`
+  const { error } = await supabase.storage.from('evidencias-chamados').upload(path, file)
+  if (error) throw error
+  return { path, nome_arquivo: file.name }
+}
+
+export async function getUrlEvidencia(path: string): Promise<string> {
+  const { data, error } = await supabase.storage.from('evidencias-chamados').createSignedUrl(path, 60 * 10)
+  if (error) throw error
+  return data.signedUrl
+}
+
+export async function listRejeicoesDoChamado(chamadoId: string): Promise<ChamadoRejeicao[]> {
+  const { data, error } = await supabase
+    .from('chamado_rejeicoes')
+    .select('*')
+    .eq('chamado_id', chamadoId)
+    .order('criado_em', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function rejeitarServico(
+  chamadoId: string,
+  motivo: string,
+  evidencias: DocumentoVerificacao[]
+): Promise<void> {
+  const { error: erroRejeicao } = await supabase
+    .from('chamado_rejeicoes')
+    .insert({ chamado_id: chamadoId, motivo, evidencias })
+  if (erroRejeicao) throw erroRejeicao
+  const { error: erroStatus } = await supabase.from('chamados').update({ status: 'em_disputa' }).eq('id', chamadoId)
+  if (erroStatus) throw erroStatus
+}
+
+export async function resolverDisputa(chamadoId: string, status: 'em_andamento' | 'concluido'): Promise<void> {
+  const patch: Partial<Chamado> = { status }
+  if (status === 'concluido') patch.concluido_em = new Date().toISOString()
+  const { error } = await supabase.from('chamados').update(patch).eq('id', chamadoId)
+  if (error) throw error
 }
 
 // ---------- Cotações (proposta de valor de um prestador pra um chamado) ----------

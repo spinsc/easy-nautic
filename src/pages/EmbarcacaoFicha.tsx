@@ -24,11 +24,18 @@ import {
   atualizarStatusCotacao,
   getMeuPrestador,
   criarChamado,
+  listRejeicoesDoChamado,
+  rejeitarServico,
+  resolverDisputa,
+  uploadEvidenciaChamado,
+  getUrlEvidencia,
 } from '@/lib/api'
 import type {
   CategoriaEquipamento,
   Chamado,
+  ChamadoRejeicao,
   Cotacao,
+  DocumentoVerificacao,
   Embarcacao,
   EmbarcacaoTag,
   EmbarcacaoTripulante,
@@ -47,12 +54,16 @@ const CATEGORIA_LABELS: Record<CategoriaEquipamento, string> = {
 const STATUS_LABELS: Record<StatusChamado, string> = {
   aberto: 'Aberto',
   em_andamento: 'Em andamento',
+  aguardando_confirmacao: 'Aguardando confirmação',
   concluido: 'Concluído',
+  em_disputa: 'Em disputa',
 }
 
 const STATUS_STYLES: Record<StatusChamado, string> = {
   aberto: 'bg-amber-100 text-amber-700',
   em_andamento: 'bg-tide-100 text-tide-700',
+  aguardando_confirmacao: 'bg-violet-100 text-violet-700',
+  em_disputa: 'bg-red-100 text-red-700',
   concluido: 'bg-emerald-100 text-emerald-700',
 }
 
@@ -136,6 +147,12 @@ export default function EmbarcacaoFicha() {
   const [descricaoChamado, setDescricaoChamado] = useState('')
   const [equipamentoChamado, setEquipamentoChamado] = useState('')
 
+  const [rejeicoesPorChamado, setRejeicoesPorChamado] = useState<Record<string, ChamadoRejeicao[]>>({})
+  const [rejeitandoId, setRejeitandoId] = useState<string | null>(null)
+  const [motivoRejeicao, setMotivoRejeicao] = useState('')
+  const [evidenciasRejeicao, setEvidenciasRejeicao] = useState<DocumentoVerificacao[]>([])
+  const [enviandoEvidencia, setEnviandoEvidencia] = useState(false)
+
   async function carregar() {
     if (!id) return
     setCarregando(true)
@@ -157,6 +174,10 @@ export default function EmbarcacaoFicha() {
       setMeuPrestadorId(meuPrestador?.id ?? null)
       const cotacoesEntries = await Promise.all(ch.map(async (c) => [c.id, await listCotacoesDoChamado(c.id)] as const))
       setCotacoesPorChamado(Object.fromEntries(cotacoesEntries))
+      const rejeicoesEntries = await Promise.all(
+        ch.filter((c) => c.status === 'em_disputa').map(async (c) => [c.id, await listRejeicoesDoChamado(c.id)] as const)
+      )
+      setRejeicoesPorChamado(Object.fromEntries(rejeicoesEntries))
       if (emb) {
         setDetalhes({
           motorizacao: emb.motorizacao ?? '',
@@ -235,12 +256,59 @@ export default function EmbarcacaoFicha() {
     }
   }
 
-  async function mudarStatusChamado(chamadoId: string, status: StatusChamado) {
+  async function confirmarServico(chamadoId: string) {
     try {
-      await atualizarStatusChamado(chamadoId, status)
+      await atualizarStatusChamado(chamadoId, 'concluido')
       await carregar()
     } catch (e) {
-      setErro(mensagemErro(e, 'Erro ao atualizar chamado'))
+      setErro(mensagemErro(e, 'Erro ao confirmar serviço'))
+    }
+  }
+
+  function iniciarRejeicao(chamadoId: string) {
+    setRejeitandoId(chamadoId)
+    setMotivoRejeicao('')
+    setEvidenciasRejeicao([])
+  }
+
+  async function handleUploadEvidencia(chamadoId: string, file: File) {
+    setEnviandoEvidencia(true)
+    try {
+      const item = await uploadEvidenciaChamado(chamadoId, file)
+      setEvidenciasRejeicao((prev) => [...prev, item])
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao enviar evidência'))
+    } finally {
+      setEnviandoEvidencia(false)
+    }
+  }
+
+  async function enviarRejeicao() {
+    if (!rejeitandoId || !motivoRejeicao.trim()) return
+    try {
+      await rejeitarServico(rejeitandoId, motivoRejeicao.trim(), evidenciasRejeicao)
+      setRejeitandoId(null)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao rejeitar serviço'))
+    }
+  }
+
+  async function abrirEvidencia(path: string) {
+    try {
+      const url = await getUrlEvidencia(path)
+      window.open(url, '_blank')
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao abrir evidência'))
+    }
+  }
+
+  async function resolverDisputaChamado(chamadoId: string, status: 'em_andamento' | 'concluido') {
+    try {
+      await resolverDisputa(chamadoId, status)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao resolver disputa'))
     }
   }
 
@@ -771,25 +839,104 @@ export default function EmbarcacaoFicha() {
                     </div>
                     <p className="text-sm text-slate-900">{c.descricao}</p>
                   </div>
-                  {c.status !== 'concluido' && (
-                    <div className="flex gap-2">
-                      {c.status === 'aberto' && (
-                        <button
-                          onClick={() => mudarStatusChamado(c.id, 'em_andamento')}
-                          className="text-xs font-medium text-tide-600 hover:text-tide-700"
-                        >
-                          Iniciar
-                        </button>
-                      )}
+                  {c.status === 'aguardando_confirmacao' && rejeitandoId !== c.id && (
+                    <div className="flex shrink-0 gap-2">
                       <button
-                        onClick={() => mudarStatusChamado(c.id, 'concluido')}
+                        onClick={() => confirmarServico(c.id)}
                         className="text-xs font-medium text-emerald-600 hover:text-emerald-700"
                       >
-                        Concluir
+                        Confirmar
+                      </button>
+                      <button
+                        onClick={() => iniciarRejeicao(c.id)}
+                        className="text-xs font-medium text-red-600 hover:text-red-700"
+                      >
+                        Rejeitar
+                      </button>
+                    </div>
+                  )}
+                  {c.status === 'em_disputa' && (
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        onClick={() => resolverDisputaChamado(c.id, 'em_andamento')}
+                        className="text-xs font-medium text-tide-600 hover:text-tide-700"
+                      >
+                        Reabrir pro prestador
+                      </button>
+                      <button
+                        onClick={() => resolverDisputaChamado(c.id, 'concluido')}
+                        className="text-xs font-medium text-emerald-600 hover:text-emerald-700"
+                      >
+                        Confirmar mesmo assim
                       </button>
                     </div>
                   )}
                 </div>
+
+                {c.status === 'aguardando_confirmacao' && c.terminei_em && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    Confirmação automática em{' '}
+                    {new Date(new Date(c.terminei_em).getTime() + 3 * 86400000).toLocaleDateString('pt-BR')}, se
+                    ninguém responder.
+                  </p>
+                )}
+
+                {rejeitandoId === c.id && (
+                  <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
+                    <CampoTexto label="Motivo da rejeição" value={motivoRejeicao} onChange={setMotivoRejeicao} />
+                    {evidenciasRejeicao.length > 0 && (
+                      <ul className="space-y-1">
+                        {evidenciasRejeicao.map((ev, i) => (
+                          <li key={i} className="text-xs text-slate-500">{ev.nome_arquivo}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <label className="inline-block cursor-pointer rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:border-tide-500">
+                      {enviandoEvidencia ? 'Enviando…' : '+ Anexar imagem, vídeo ou documento'}
+                      <input
+                        type="file"
+                        className="hidden"
+                        disabled={enviandoEvidencia}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) handleUploadEvidencia(c.id, file)
+                        }}
+                      />
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={enviarRejeicao}
+                        disabled={!motivoRejeicao.trim()}
+                        className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        Enviar rejeição
+                      </button>
+                      <button onClick={() => setRejeitandoId(null)} className="rounded-md px-4 py-2 text-sm text-slate-500 hover:text-slate-900">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {c.status === 'em_disputa' && (rejeicoesPorChamado[c.id]?.length ?? 0) > 0 && (
+                  <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Motivo da disputa</p>
+                    {rejeicoesPorChamado[c.id].map((rej) => (
+                      <div key={rej.id} className="rounded-md bg-red-50 p-2 text-xs">
+                        <p className="mb-1 text-slate-900">{rej.motivo}</p>
+                        {rej.evidencias.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {rej.evidencias.map((ev, i) => (
+                              <button key={i} onClick={() => abrirEvidencia(ev.path)} className="text-tide-600 hover:underline">
+                                {ev.nome_arquivo}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {(cotacoesPorChamado[c.id]?.length ?? 0) > 0 && (
                   <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">

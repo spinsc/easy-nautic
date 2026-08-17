@@ -14,7 +14,9 @@ const CATEGORIA_LABELS: Record<CategoriaEquipamento, string> = {
 const STATUS_LABELS: Record<StatusChamado, string> = {
   aberto: 'Aberto',
   em_andamento: 'Em andamento',
+  aguardando_confirmacao: 'Aguardando confirmação',
   concluido: 'Concluído',
+  em_disputa: 'Em disputa',
 }
 
 export default function EmbarcacaoPublica() {

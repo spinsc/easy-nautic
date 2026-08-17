@@ -8,13 +8,17 @@ import type { Chamado, Prestador, StatusChamado } from '@/types'
 const STATUS_LABELS: Record<StatusChamado, string> = {
   aberto: 'Aberto',
   em_andamento: 'Em andamento',
+  aguardando_confirmacao: 'Aguardando confirmação',
   concluido: 'Concluído',
+  em_disputa: 'Em disputa',
 }
 
 const STATUS_STYLES: Record<StatusChamado, string> = {
   aberto: 'bg-amber-100 text-amber-700',
   em_andamento: 'bg-tide-100 text-tide-700',
+  aguardando_confirmacao: 'bg-violet-100 text-violet-700',
   concluido: 'bg-emerald-100 text-emerald-700',
+  em_disputa: 'bg-red-100 text-red-700',
 }
 
 export default function Chamados() {
@@ -139,33 +143,38 @@ export default function Chamados() {
                   </div>
                   <p className="text-sm font-medium text-slate-900">{c.embarcacao_nome}</p>
                   <p className="text-sm text-slate-600">{c.descricao}</p>
+                  {c.status === 'aguardando_confirmacao' && c.terminei_em && (
+                    <p className="mt-1 text-xs text-slate-400">
+                      Confirmação automática em {new Date(new Date(c.terminei_em).getTime() + 3 * 86400000).toLocaleDateString('pt-BR')}, se ninguém responder.
+                    </p>
+                  )}
                 </div>
-                {c.status !== 'concluido' && (
-                  <div className="flex shrink-0 gap-2">
-                    {c.status === 'aberto' && (
-                      <button
-                        onClick={() => mudarStatus(c.id, 'em_andamento')}
-                        className="text-xs font-medium text-tide-600 hover:text-tide-700"
-                      >
-                        Iniciar
-                      </button>
-                    )}
+                <div className="flex shrink-0 gap-2">
+                  {c.status === 'aberto' && (
                     <button
-                      onClick={() => mudarStatus(c.id, 'concluido')}
+                      onClick={() => mudarStatus(c.id, 'em_andamento')}
+                      className="text-xs font-medium text-tide-600 hover:text-tide-700"
+                    >
+                      Iniciar
+                    </button>
+                  )}
+                  {c.status === 'em_andamento' && (
+                    <button
+                      onClick={() => mudarStatus(c.id, 'aguardando_confirmacao')}
                       className="text-xs font-medium text-emerald-600 hover:text-emerald-700"
                     >
-                      Concluir
+                      Marcar como concluído
                     </button>
-                    {cotandoId !== c.id && (
-                      <button
-                        onClick={() => iniciarCotacao(c.id)}
-                        className="text-xs font-medium text-slate-500 hover:text-slate-900"
-                      >
-                        Cotar
-                      </button>
-                    )}
-                  </div>
-                )}
+                  )}
+                  {c.status === 'aberto' && cotandoId !== c.id && (
+                    <button
+                      onClick={() => iniciarCotacao(c.id)}
+                      className="text-xs font-medium text-slate-500 hover:text-slate-900"
+                    >
+                      Cotar
+                    </button>
+                  )}
+                </div>
               </div>
 
               {cotandoId === c.id && (

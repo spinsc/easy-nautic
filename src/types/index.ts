@@ -51,7 +51,7 @@ export interface PrestadorCategoria {
 }
 
 export type CategoriaEquipamento = 'MOTOR' | 'GERADOR' | 'AR_CONDICIONADO' | 'ACESSORIO'
-export type StatusChamado = 'aberto' | 'em_andamento' | 'concluido'
+export type StatusChamado = 'aberto' | 'em_andamento' | 'aguardando_confirmacao' | 'concluido' | 'em_disputa'
 export type TipoChamado = 'comercial' | 'garantia'
 
 export interface Embarcacao {
@@ -134,8 +134,18 @@ export interface Chamado {
   descricao: string
   status: StatusChamado
   atendido_por: string | null
+  terminei_em: string | null
   criado_em: string
   concluido_em: string | null
+}
+
+export interface ChamadoRejeicao {
+  id: string
+  chamado_id: string
+  motivo: string
+  evidencias: DocumentoVerificacao[]
+  criado_por: string | null
+  criado_em: string
 }
 
 export type StatusCotacao = 'pendente' | 'aprovada' | 'rejeitada' | 'paga'

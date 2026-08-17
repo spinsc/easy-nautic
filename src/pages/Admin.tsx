@@ -20,7 +20,9 @@ const STATUS_PRESTADOR_LABELS: Record<StatusVerificacao, string> = {
 const STATUS_CHAMADO_LABELS: Record<StatusChamado, string> = {
   aberto: 'Aberto',
   em_andamento: 'Em andamento',
+  aguardando_confirmacao: 'Aguardando confirmação',
   concluido: 'Concluído',
+  em_disputa: 'Em disputa',
 }
 
 export default function Admin() {
