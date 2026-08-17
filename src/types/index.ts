@@ -28,6 +28,7 @@ export interface Prestador {
   status_verificacao: StatusVerificacao
   documentos_verificacao: DocumentoVerificacao[]
   formas_pagamento: FormaPagamento[]
+  condicao_pagamento_padrao: string | null
   avaliacao_media: number | null
   total_avaliacoes: number
   criado_em: string
@@ -146,6 +147,7 @@ export interface Cotacao {
   valor: number
   descricao: string | null
   forma_pagamento: FormaPagamento | null
+  condicao_pagamento: string | null
   status: StatusCotacao
   criado_em: string
   aprovado_em: string | null

@@ -30,6 +30,8 @@ export default function Chamados() {
   const [usarFormaGlobal, setUsarFormaGlobal] = useState(true)
   const [tipoPagamentoCustom, setTipoPagamentoCustom] = useState('')
   const [dadosPagamentoCustom, setDadosPagamentoCustom] = useState('')
+  const [usarCondicaoGlobal, setUsarCondicaoGlobal] = useState(true)
+  const [condicaoCustom, setCondicaoCustom] = useState('')
 
   async function carregar() {
     setCarregando(true)
@@ -66,6 +68,8 @@ export default function Chamados() {
     setUsarFormaGlobal(true)
     setTipoPagamentoCustom('')
     setDadosPagamentoCustom('')
+    setUsarCondicaoGlobal(true)
+    setCondicaoCustom('')
     setSucesso(null)
   }
 
@@ -77,7 +81,8 @@ export default function Chamados() {
         prestador.id,
         valorCotacao,
         descricaoCotacao || null,
-        usarFormaGlobal ? null : { tipo: tipoPagamentoCustom, dados: dadosPagamentoCustom }
+        usarFormaGlobal ? null : { tipo: tipoPagamentoCustom, dados: dadosPagamentoCustom },
+        usarCondicaoGlobal ? null : condicaoCustom
       )
       setCotandoId(null)
       setSucesso('Cotação enviada.')
@@ -177,6 +182,19 @@ export default function Chamados() {
                       <CampoTexto label="Tipo" value={tipoPagamentoCustom} onChange={setTipoPagamentoCustom} placeholder="ex: Pix" />
                       <CampoTexto label="Dados" value={dadosPagamentoCustom} onChange={setDadosPagamentoCustom} />
                     </div>
+                  )}
+                  <CampoCheckbox
+                    label="Usar minha condição de pagamento padrão"
+                    checked={usarCondicaoGlobal}
+                    onChange={setUsarCondicaoGlobal}
+                  />
+                  {!usarCondicaoGlobal && (
+                    <CampoTexto
+                      label="Condição de pagamento"
+                      value={condicaoCustom}
+                      onChange={setCondicaoCustom}
+                      placeholder="ex: 50% de entrada, 50% na conclusão"
+                    />
                   )}
                   <div className="flex gap-2">
                     <button

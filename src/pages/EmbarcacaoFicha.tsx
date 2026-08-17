@@ -808,6 +808,9 @@ export default function EmbarcacaoFicha() {
                         <p className="text-slate-500">
                           Pagamento: {cot.forma_pagamento ? `${cot.forma_pagamento.tipo} — ${cot.forma_pagamento.dados}` : 'padrão do prestador'}
                         </p>
+                        <p className="text-slate-500">
+                          Condição: {cot.condicao_pagamento ?? 'padrão do prestador'}
+                        </p>
                         <div className="mt-2 flex gap-2">
                           {cot.status === 'pendente' && (
                             <>

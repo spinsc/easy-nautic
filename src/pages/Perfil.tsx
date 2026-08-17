@@ -65,6 +65,8 @@ export default function Perfil() {
   const [adicionandoPagamento, setAdicionandoPagamento] = useState(false)
   const [tipoPagamento, setTipoPagamento] = useState('')
   const [dadosPagamento, setDadosPagamento] = useState('')
+  const [condicaoPagamentoPadrao, setCondicaoPagamentoPadrao] = useState('')
+  const [salvandoCondicaoPagamento, setSalvandoCondicaoPagamento] = useState(false)
 
   async function carregar() {
     setCarregando(true)
@@ -74,6 +76,7 @@ export default function Perfil() {
       if (p) {
         setNome(p.nome)
         setTelefone(p.telefone ?? '')
+        setCondicaoPagamentoPadrao(p.condicao_pagamento_padrao ?? '')
         const [cats, minhas, admin] = await Promise.all([
           listCategoriasServico(),
           listPrestadorCategorias(p.id),
@@ -169,6 +172,19 @@ export default function Perfil() {
       setErro(mensagemErro(e, 'Erro ao enviar documento'))
     } finally {
       setEnviandoDocumento(false)
+    }
+  }
+
+  async function salvarCondicaoPagamento() {
+    if (!prestador) return
+    setSalvandoCondicaoPagamento(true)
+    try {
+      await updatePrestador(prestador.id, { condicao_pagamento_padrao: condicaoPagamentoPadrao || null })
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao salvar condição de pagamento'))
+    } finally {
+      setSalvandoCondicaoPagamento(false)
     }
   }
 
@@ -391,6 +407,22 @@ export default function Perfil() {
         <p className="mb-4 text-xs text-slate-400">
           Usadas por padrão nas suas cotações — você pode especificar outra forma em cada cotação, se preferir.
         </p>
+
+        <div className="mb-4 border-b border-slate-200 pb-4">
+          <CampoTexto
+            label="Condição de pagamento padrão"
+            value={condicaoPagamentoPadrao}
+            onChange={setCondicaoPagamentoPadrao}
+            placeholder="ex: 50% de entrada, 50% na conclusão do serviço"
+          />
+          <button
+            onClick={salvarCondicaoPagamento}
+            disabled={salvandoCondicaoPagamento}
+            className="mt-2 rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+          >
+            {salvandoCondicaoPagamento ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
 
         {prestador.formas_pagamento.length === 0 && !adicionandoPagamento && (
           <p className="text-sm text-slate-400">Nenhuma forma de pagamento cadastrada ainda.</p>

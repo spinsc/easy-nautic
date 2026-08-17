@@ -397,11 +397,17 @@ export async function createCotacao(
   prestadorId: string,
   valor: number,
   descricao: string | null,
-  formaPagamento: FormaPagamento | null
+  formaPagamento: FormaPagamento | null,
+  condicaoPagamento: string | null
 ): Promise<void> {
-  const { error } = await supabase
-    .from('cotacoes')
-    .insert({ chamado_id: chamadoId, prestador_id: prestadorId, valor, descricao, forma_pagamento: formaPagamento })
+  const { error } = await supabase.from('cotacoes').insert({
+    chamado_id: chamadoId,
+    prestador_id: prestadorId,
+    valor,
+    descricao,
+    forma_pagamento: formaPagamento,
+    condicao_pagamento: condicaoPagamento,
+  })
   if (error) throw error
 }
 
