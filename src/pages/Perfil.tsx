@@ -22,8 +22,21 @@ import {
   listMinhasRegioes,
   addMinhaRegiao,
   removeMinhaRegiao,
+  listMinhasAssinaturasPush,
+  salvarTokenPush,
+  removerTokenPush,
 } from '@/lib/api'
-import type { CategoriaServico, Cidade, Estado, Marca, Prestador, PrestadorCategoria, StatusVerificacao } from '@/types'
+import { solicitarTokenPush } from '@/lib/firebase'
+import type {
+  CategoriaServico,
+  Cidade,
+  Estado,
+  Marca,
+  Prestador,
+  PrestadorCategoria,
+  PushSubscription,
+  StatusVerificacao,
+} from '@/types'
 
 const STATUS_LABELS: Record<StatusVerificacao, string> = {
   pendente: 'Pendente de verificação',
@@ -87,6 +100,9 @@ export default function Perfil() {
   const [cidadesDoEstado, setCidadesDoEstado] = useState<Cidade[]>([])
   const [cidadeSelecionada, setCidadeSelecionada] = useState('')
 
+  const [assinaturasPush, setAssinaturasPush] = useState<PushSubscription[]>([])
+  const [ativandoPush, setAtivandoPush] = useState(false)
+
   async function carregar() {
     setCarregando(true)
     try {
@@ -96,15 +112,17 @@ export default function Perfil() {
         setNome(p.nome)
         setTelefone(p.telefone ?? '')
         setCondicaoPagamentoPadrao(p.condicao_pagamento_padrao ?? '')
-        const [cats, minhas, admin, catalogoMarcas, marcasProprias, listaEstados, regioesProprias] = await Promise.all([
-          listCategoriasServico(),
-          listPrestadorCategorias(p.id),
-          souAdmin(),
-          listMarcas(),
-          listMinhasMarcas(p.id),
-          listEstados(),
-          listMinhasRegioes(p.id),
-        ])
+        const [cats, minhas, admin, catalogoMarcas, marcasProprias, listaEstados, regioesProprias, assinaturasProprias] =
+          await Promise.all([
+            listCategoriasServico(),
+            listPrestadorCategorias(p.id),
+            souAdmin(),
+            listMarcas(),
+            listMinhasMarcas(p.id),
+            listEstados(),
+            listMinhasRegioes(p.id),
+            listMinhasAssinaturasPush(p.id),
+          ])
         setCategorias(cats)
         setMinhasCategorias(minhas)
         setEhAdmin(admin)
@@ -112,6 +130,7 @@ export default function Perfil() {
         setMinhasMarcas(marcasProprias)
         setEstados(listaEstados)
         setMinhasRegioes(regioesProprias)
+        setAssinaturasPush(assinaturasProprias)
       }
       setErro(null)
     } catch (e) {
@@ -196,6 +215,30 @@ export default function Perfil() {
       await carregar()
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao remover região'))
+    }
+  }
+
+  async function ativarNotificacoesPush() {
+    if (!prestador) return
+    setAtivandoPush(true)
+    try {
+      const token = await solicitarTokenPush()
+      if (!token) throw new Error('Não foi possível gerar o token de notificações.')
+      await salvarTokenPush(prestador.id, token)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao ativar notificações'))
+    } finally {
+      setAtivandoPush(false)
+    }
+  }
+
+  async function desativarNotificacaoPush(id: string) {
+    try {
+      await removerTokenPush(id)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao desativar notificação'))
     }
   }
 
@@ -558,6 +601,40 @@ export default function Perfil() {
             </button>
           </div>
         </div>
+      </section>
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+        <h2 className="mb-1 font-display text-lg text-slate-900">Notificações push</h2>
+        <p className="mb-4 text-xs text-slate-400">
+          Receba um aviso no navegador assim que surgir uma solicitação de serviço compatível com suas marcas e regiões.
+        </p>
+        {assinaturasPush.length === 0 ? (
+          <button
+            onClick={ativarNotificacoesPush}
+            disabled={ativandoPush}
+            className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+          >
+            {ativandoPush ? 'Ativando…' : 'Ativar notificações neste navegador'}
+          </button>
+        ) : (
+          <div className="space-y-2">
+            {assinaturasPush.map((a) => (
+              <div key={a.id} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                <span>Este navegador está recebendo notificações</span>
+                <button onClick={() => desativarNotificacaoPush(a.id)} className="text-red-600 hover:text-red-700">
+                  Desativar
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={ativarNotificacoesPush}
+              disabled={ativandoPush}
+              className="text-sm font-medium text-tide-600 hover:text-tide-700 disabled:opacity-50"
+            >
+              {ativandoPush ? 'Ativando…' : '+ Ativar em outro navegador/dispositivo'}
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">

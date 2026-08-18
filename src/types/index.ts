@@ -47,6 +47,13 @@ export interface PrestadorRegiao {
   criado_em: string
 }
 
+export interface PushSubscription {
+  id: string
+  prestador_id: string
+  fcm_token: string
+  criado_em: string
+}
+
 export interface DocumentoVerificacao {
   path: string
   nome_arquivo: string

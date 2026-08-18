@@ -19,6 +19,7 @@ import type {
   Marca,
   Prestador,
   PrestadorCategoria,
+  PushSubscription,
   StatusCotacao,
   StatusVerificacao,
   StatusVisita,
@@ -194,6 +195,24 @@ export async function addMinhaRegiao(prestadorId: string, cidadeId: number): Pro
 
 export async function removeMinhaRegiao(id: string): Promise<void> {
   const { error } = await supabase.from('prestador_regioes').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listMinhasAssinaturasPush(prestadorId: string): Promise<PushSubscription[]> {
+  const { data, error } = await supabase.from('push_subscriptions').select('*').eq('prestador_id', prestadorId)
+  if (error) throw error
+  return data ?? []
+}
+
+export async function salvarTokenPush(prestadorId: string, fcmToken: string): Promise<void> {
+  const { error } = await supabase
+    .from('push_subscriptions')
+    .upsert({ prestador_id: prestadorId, fcm_token: fcmToken }, { onConflict: 'prestador_id,fcm_token' })
+  if (error) throw error
+}
+
+export async function removerTokenPush(id: string): Promise<void> {
+  const { error } = await supabase.from('push_subscriptions').delete().eq('id', id)
   if (error) throw error
 }
 
