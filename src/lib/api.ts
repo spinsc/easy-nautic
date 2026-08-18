@@ -1,5 +1,10 @@
 import { supabase } from './supabase'
 import type {
+  AdminDashboardKpis,
+  AdminNegocioEmbarcacao,
+  AdminNegocioPrestador,
+  AdminNotificacaoStat,
+  AdminSerieTemporalPonto,
   CategoriaServico,
   Chamado,
   ChamadoNotificacao,
@@ -467,6 +472,36 @@ export async function listTodosChamadosAdmin(): Promise<(Chamado & { embarcacao_
     const { embarcacoes, ...chamado } = row as unknown as Chamado & { embarcacoes: { nome: string } | null }
     return { ...chamado, embarcacao_nome: embarcacoes?.nome ?? '—' }
   })
+}
+
+export async function getDashboardKpis(): Promise<AdminDashboardKpis> {
+  const { data, error } = await supabase.rpc('admin_dashboard_kpis')
+  if (error) throw error
+  return data as AdminDashboardKpis
+}
+
+export async function listNegociosPorPrestador(limite = 20): Promise<AdminNegocioPrestador[]> {
+  const { data, error } = await supabase.rpc('admin_negocios_por_prestador', { p_limite: limite })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function listNegociosPorEmbarcacao(limite = 20): Promise<AdminNegocioEmbarcacao[]> {
+  const { data, error } = await supabase.rpc('admin_negocios_por_embarcacao', { p_limite: limite })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getSerieTemporal(meses = 12): Promise<AdminSerieTemporalPonto[]> {
+  const { data, error } = await supabase.rpc('admin_serie_temporal', { p_meses: meses })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getNotificacoesStats(): Promise<AdminNotificacaoStat[]> {
+  const { data, error } = await supabase.rpc('admin_notificacoes_stats')
+  if (error) throw error
+  return data ?? []
 }
 
 export async function uploadEvidenciaChamado(chamadoId: string, file: File): Promise<DocumentoVerificacao> {

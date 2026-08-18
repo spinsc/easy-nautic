@@ -252,6 +252,63 @@ export interface ChamadoVisita {
   respondido_por: string | null
 }
 
+export interface AdminDashboardKpis {
+  total_prestadores: number
+  prestadores_pendentes: number
+  prestadores_verificados: number
+  prestadores_rejeitados: number
+  novos_prestadores_30d: number
+  total_embarcacoes: number
+  novas_embarcacoes_30d: number
+  total_chamados: number
+  chamados_abertos: number
+  chamados_em_andamento: number
+  chamados_aguardando_confirmacao: number
+  chamados_concluidos: number
+  chamados_em_disputa: number
+  novos_chamados_30d: number
+  total_cotacoes: number
+  cotacoes_aprovadas: number
+  cotacoes_pagas: number
+  valor_total_pago: number
+  ticket_medio_pago: number
+}
+
+export interface AdminNegocioPrestador {
+  prestador_id: string
+  nome: string
+  status_verificacao: StatusVerificacao
+  qtd_chamados_atendidos: number
+  qtd_chamados_concluidos: number
+  qtd_cotacoes_pagas: number
+  valor_total: number
+  avaliacao_media: number | null
+  total_avaliacoes: number
+}
+
+export interface AdminNegocioEmbarcacao {
+  embarcacao_id: string
+  nome: string
+  cliente_nome: string
+  qtd_chamados: number
+  qtd_chamados_concluidos: number
+  valor_total: number
+}
+
+export interface AdminSerieTemporalPonto {
+  mes: string
+  novos_prestadores: number
+  novas_embarcacoes: number
+  novos_chamados: number
+  chamados_concluidos: number
+}
+
+export interface AdminNotificacaoStat {
+  canal: 'email' | 'push'
+  status: StatusNotificacao
+  qtd: number
+}
+
 export interface EmbarcacaoPublicaData {
   embarcacao: {
     id: string
