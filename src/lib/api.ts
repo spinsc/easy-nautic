@@ -474,6 +474,35 @@ export async function listTodosChamadosAdmin(): Promise<(Chamado & { embarcacao_
   })
 }
 
+export async function criarUsuarioAdmin(dados: {
+  email: string
+  senha: string
+  nome: string
+  tipo_pessoa: TipoPessoa
+  cpf_cnpj?: string
+  telefone?: string
+  verificar_automaticamente?: boolean
+  tornar_admin?: boolean
+}): Promise<{ id: string }> {
+  const { data, error } = await supabase.functions.invoke('admin-criar-usuario', { body: dados })
+  if (error) {
+    const contexto = (error as { context?: Response }).context
+    if (contexto && typeof contexto.json === 'function') {
+      let mensagem: string | undefined
+      try {
+        const corpo = await contexto.json()
+        mensagem = corpo?.error
+      } catch {
+        // corpo não é JSON — segue com a mensagem genérica
+      }
+      throw new Error(mensagem ?? error.message)
+    }
+    throw error
+  }
+  if (data?.error) throw new Error(data.error)
+  return data as { id: string }
+}
+
 export async function getDashboardKpis(): Promise<AdminDashboardKpis> {
   const { data, error } = await supabase.rpc('admin_dashboard_kpis')
   if (error) throw error

@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import { mensagemErro } from '@/lib/errors'
+import { CampoTexto, CampoSelect, CampoCheckbox } from '@/components/campos'
 import {
   souAdmin,
   listPrestadoresAdmin,
@@ -23,6 +24,7 @@ import {
   listNegociosPorEmbarcacao,
   getSerieTemporal,
   getNotificacoesStats,
+  criarUsuarioAdmin,
 } from '@/lib/api'
 import type {
   AdminDashboardKpis,
@@ -34,6 +36,7 @@ import type {
   Prestador,
   StatusChamado,
   StatusVerificacao,
+  TipoPessoa,
 } from '@/types'
 
 const STATUS_PRESTADOR_LABELS: Record<StatusVerificacao, string> = {
@@ -68,10 +71,22 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
 }
 
 export default function Admin() {
-  const [aba, setAba] = useState<'dashboard' | 'moderacao'>('dashboard')
+  const [aba, setAba] = useState<'dashboard' | 'moderacao' | 'usuarios'>('dashboard')
   const [autorizado, setAutorizado] = useState<boolean | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
+
+  // Novo usuário
+  const [novoNome, setNovoNome] = useState('')
+  const [novoEmail, setNovoEmail] = useState('')
+  const [novaSenha, setNovaSenha] = useState('')
+  const [novoTipoPessoa, setNovoTipoPessoa] = useState<TipoPessoa>('PF')
+  const [novoCpfCnpj, setNovoCpfCnpj] = useState('')
+  const [novoTelefone, setNovoTelefone] = useState('')
+  const [novoVerificar, setNovoVerificar] = useState(true)
+  const [novoTornarAdmin, setNovoTornarAdmin] = useState(false)
+  const [criandoUsuario, setCriandoUsuario] = useState(false)
+  const [sucessoUsuario, setSucessoUsuario] = useState<string | null>(null)
 
   // Moderação
   const [prestadores, setPrestadores] = useState<Prestador[]>([])
@@ -148,6 +163,36 @@ export default function Admin() {
     }
   }
 
+  async function criarUsuario() {
+    setCriandoUsuario(true)
+    setSucessoUsuario(null)
+    setErro(null)
+    try {
+      await criarUsuarioAdmin({
+        email: novoEmail,
+        senha: novaSenha,
+        nome: novoNome,
+        tipo_pessoa: novoTipoPessoa,
+        cpf_cnpj: novoCpfCnpj || undefined,
+        telefone: novoTelefone || undefined,
+        verificar_automaticamente: novoVerificar,
+        tornar_admin: novoTornarAdmin,
+      })
+      setSucessoUsuario(`Usuário "${novoNome}" criado com sucesso.`)
+      setNovoNome('')
+      setNovoEmail('')
+      setNovaSenha('')
+      setNovoCpfCnpj('')
+      setNovoTelefone('')
+      setNovoTornarAdmin(false)
+      if (aba === 'moderacao') await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao criar usuário'))
+    } finally {
+      setCriandoUsuario(false)
+    }
+  }
+
   if (carregando) return <p className="p-8 text-sm text-slate-400">Carregando…</p>
   if (autorizado === false) {
     return (
@@ -175,7 +220,7 @@ export default function Admin() {
       </header>
 
       <div className="mb-8 flex gap-1 rounded-md border border-slate-200 p-1" style={{ width: 'fit-content' }}>
-        {(['dashboard', 'moderacao'] as const).map((a) => (
+        {(['dashboard', 'moderacao', 'usuarios'] as const).map((a) => (
           <button
             key={a}
             onClick={() => setAba(a)}
@@ -183,7 +228,7 @@ export default function Admin() {
               aba === a ? 'bg-tide-700 text-white' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            {a === 'dashboard' ? 'Dashboard' : 'Moderação'}
+            {a === 'dashboard' ? 'Dashboard' : a === 'moderacao' ? 'Moderação' : 'Usuários'}
           </button>
         ))}
       </div>
@@ -452,6 +497,49 @@ export default function Admin() {
             )}
           </section>
         </>
+      )}
+
+      {aba === 'usuarios' && (
+        <section className="max-w-lg">
+          <h2 className="mb-1 font-display text-lg text-slate-900">Cadastrar usuário</h2>
+          <p className="mb-4 text-xs text-slate-400">
+            Cria a conta diretamente (sem passar pelo cadastro público) — útil pra dar acesso a alguém sem esperar
+            e-mail de confirmação.
+          </p>
+
+          {sucessoUsuario && (
+            <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {sucessoUsuario}
+            </div>
+          )}
+
+          <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-5">
+            <CampoTexto label="Nome completo" value={novoNome} onChange={setNovoNome} required />
+            <CampoTexto label="E-mail" type="email" value={novoEmail} onChange={setNovoEmail} required />
+            <CampoTexto label="Senha" type="password" value={novaSenha} onChange={setNovaSenha} required />
+            <CampoSelect
+              label="Tipo de pessoa"
+              value={novoTipoPessoa}
+              onChange={(v) => setNovoTipoPessoa(v as TipoPessoa)}
+              options={[
+                { value: 'PF', label: 'Pessoa física' },
+                { value: 'PJ', label: 'Pessoa jurídica' },
+              ]}
+            />
+            <CampoTexto label="CPF/CNPJ" value={novoCpfCnpj} onChange={setNovoCpfCnpj} />
+            <CampoTexto label="Telefone" type="tel" value={novoTelefone} onChange={setNovoTelefone} />
+            <CampoCheckbox label="Marcar como verificado automaticamente" checked={novoVerificar} onChange={setNovoVerificar} />
+            <CampoCheckbox label="Tornar administrador" checked={novoTornarAdmin} onChange={setNovoTornarAdmin} />
+
+            <button
+              onClick={criarUsuario}
+              disabled={criandoUsuario || !novoNome || !novoEmail || !novaSenha}
+              className="w-full rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+            >
+              {criandoUsuario ? 'Criando…' : 'Criar usuário'}
+            </button>
+          </div>
+        </section>
       )}
     </div>
   )
