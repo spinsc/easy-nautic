@@ -25,6 +25,7 @@ import {
   listMinhasAssinaturasPush,
   salvarTokenPush,
   removerTokenPush,
+  getMinhaAvaliacaoComoTomador,
 } from '@/lib/api'
 import { solicitarTokenPush } from '@/lib/firebase'
 import type {
@@ -103,6 +104,8 @@ export default function Perfil() {
   const [assinaturasPush, setAssinaturasPush] = useState<PushSubscription[]>([])
   const [ativandoPush, setAtivandoPush] = useState(false)
 
+  const [avaliacaoTomador, setAvaliacaoTomador] = useState<{ media: number; total: number } | null>(null)
+
   async function carregar() {
     setCarregando(true)
     try {
@@ -112,7 +115,7 @@ export default function Perfil() {
         setNome(p.nome)
         setTelefone(p.telefone ?? '')
         setCondicaoPagamentoPadrao(p.condicao_pagamento_padrao ?? '')
-        const [cats, minhas, admin, catalogoMarcas, marcasProprias, listaEstados, regioesProprias, assinaturasProprias] =
+        const [cats, minhas, admin, catalogoMarcas, marcasProprias, listaEstados, regioesProprias, assinaturasProprias, avaliacaoComoTomador] =
           await Promise.all([
             listCategoriasServico(),
             listPrestadorCategorias(p.id),
@@ -122,6 +125,7 @@ export default function Perfil() {
             listEstados(),
             listMinhasRegioes(p.id),
             listMinhasAssinaturasPush(p.id),
+            getMinhaAvaliacaoComoTomador(),
           ])
         setCategorias(cats)
         setMinhasCategorias(minhas)
@@ -131,6 +135,7 @@ export default function Perfil() {
         setEstados(listaEstados)
         setMinhasRegioes(regioesProprias)
         setAssinaturasPush(assinaturasProprias)
+        setAvaliacaoTomador(avaliacaoComoTomador)
       }
       setErro(null)
     } catch (e) {
@@ -364,6 +369,18 @@ export default function Perfil() {
           >
             {STATUS_LABELS[prestador.status_verificacao]}
           </span>
+          {prestador.avaliacao_media != null && (
+            <p className="mt-2 text-xs text-slate-500">
+              Como prestador: <span className="text-amber-500">★</span> {prestador.avaliacao_media.toFixed(1)} (
+              {prestador.total_avaliacoes} avaliaç{prestador.total_avaliacoes === 1 ? 'ão' : 'ões'})
+            </p>
+          )}
+          {avaliacaoTomador && (
+            <p className="mt-1 text-xs text-slate-500">
+              Como cliente: <span className="text-amber-500">★</span> {avaliacaoTomador.media.toFixed(1)} (
+              {avaliacaoTomador.total} avaliaç{avaliacaoTomador.total === 1 ? 'ão' : 'ões'})
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <Link to="/embarcacoes" className="text-sm text-slate-500 hover:text-slate-900">

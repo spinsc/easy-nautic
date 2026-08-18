@@ -309,6 +309,19 @@ export interface AdminNotificacaoStat {
   qtd: number
 }
 
+export type PapelAvaliado = 'prestador' | 'tomador'
+
+export interface Avaliacao {
+  id: string
+  chamado_id: string
+  avaliador_id: string
+  avaliado_id: string
+  papel_avaliado: PapelAvaliado
+  nota: number
+  comentario: string | null
+  criado_em: string
+}
+
 export interface EmbarcacaoPublicaData {
   embarcacao: {
     id: string

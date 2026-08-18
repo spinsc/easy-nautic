@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { mensagemErro } from '@/lib/errors'
 import { CampoTexto, CampoNumero, CampoCheckbox } from '@/components/campos'
+import { AvaliacaoForm } from '@/components/AvaliacaoForm'
 import {
   listMeusChamados,
   atualizarStatusChamado,
@@ -11,8 +12,9 @@ import {
   perguntarSobreChamado,
   listVisitasDoChamado,
   solicitarVisita,
+  listAvaliacoesDoChamado,
 } from '@/lib/api'
-import type { Chamado, ChamadoPergunta, ChamadoVisita, Prestador, StatusChamado } from '@/types'
+import type { Avaliacao, Chamado, ChamadoPergunta, ChamadoVisita, Prestador, StatusChamado } from '@/types'
 
 const STATUS_VISITA_LABELS: Record<ChamadoVisita['status'], string> = {
   solicitada: 'Aguardando resposta',
@@ -60,6 +62,8 @@ export default function Chamados() {
   const [visitandoId, setVisitandoId] = useState<string | null>(null)
   const [dataVisita, setDataVisita] = useState('')
 
+  const [avaliacoesPorChamado, setAvaliacoesPorChamado] = useState<Record<string, Avaliacao[]>>({})
+
   async function carregar() {
     setCarregando(true)
     try {
@@ -70,6 +74,10 @@ export default function Chamados() {
       setPerguntasPorChamado(Object.fromEntries(perguntasEntries))
       const visitasEntries = await Promise.all(ch.map(async (c) => [c.id, await listVisitasDoChamado(c.id)] as const))
       setVisitasPorChamado(Object.fromEntries(visitasEntries))
+      const avaliacoesEntries = await Promise.all(
+        ch.filter((c) => c.status === 'concluido').map(async (c) => [c.id, await listAvaliacoesDoChamado(c.id)] as const)
+      )
+      setAvaliacoesPorChamado(Object.fromEntries(avaliacoesEntries))
       setErro(null)
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao carregar chamados'))
@@ -250,6 +258,16 @@ export default function Chamados() {
                   )}
                 </div>
               </div>
+
+              {c.status === 'concluido' && prestador && (
+                <AvaliacaoForm
+                  chamadoId={c.id}
+                  papelAvaliado="tomador"
+                  minhaAvaliacao={avaliacoesPorChamado[c.id]?.find((a) => a.avaliador_id === prestador.id)}
+                  rotulo="Avaliar cliente"
+                  onAvaliado={carregar}
+                />
+              )}
 
               {(perguntasPorChamado[c.id]?.length ?? 0) > 0 && (
                 <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">

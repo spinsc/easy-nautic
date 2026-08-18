@@ -5,6 +5,7 @@ import type {
   AdminNegocioPrestador,
   AdminNotificacaoStat,
   AdminSerieTemporalPonto,
+  Avaliacao,
   CategoriaServico,
   Chamado,
   ChamadoNotificacao,
@@ -22,6 +23,7 @@ import type {
   Estado,
   FormaPagamento,
   Marca,
+  PapelAvaliado,
   Prestador,
   PrestadorCategoria,
   PushSubscription,
@@ -531,6 +533,45 @@ export async function getNotificacoesStats(): Promise<AdminNotificacaoStat[]> {
   const { data, error } = await supabase.rpc('admin_notificacoes_stats')
   if (error) throw error
   return data ?? []
+}
+
+export async function criarAvaliacao(
+  chamadoId: string,
+  papelAvaliado: PapelAvaliado,
+  nota: number,
+  comentario?: string
+): Promise<void> {
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user) throw new Error('Não autenticado')
+  const { error } = await supabase.from('avaliacoes').insert({
+    chamado_id: chamadoId,
+    avaliador_id: userData.user.id,
+    avaliado_id: userData.user.id, // sobrescrito no servidor pelo trigger valida_avaliacao
+    papel_avaliado: papelAvaliado,
+    nota,
+    comentario: comentario || null,
+  })
+  if (error) throw error
+}
+
+export async function listAvaliacoesDoChamado(chamadoId: string): Promise<Avaliacao[]> {
+  const { data, error } = await supabase.from('avaliacoes').select('*').eq('chamado_id', chamadoId)
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getMinhaAvaliacaoComoTomador(): Promise<{ media: number; total: number } | null> {
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user) return null
+  const { data, error } = await supabase
+    .from('avaliacoes')
+    .select('nota')
+    .eq('avaliado_id', userData.user.id)
+    .eq('papel_avaliado', 'tomador')
+  if (error) throw error
+  if (!data || data.length === 0) return null
+  const soma = data.reduce((acc, a) => acc + a.nota, 0)
+  return { media: soma / data.length, total: data.length }
 }
 
 export async function uploadEvidenciaChamado(chamadoId: string, file: File): Promise<DocumentoVerificacao> {

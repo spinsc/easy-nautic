@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { mensagemErro } from '@/lib/errors'
 import { CampoTexto, CampoSelect, CampoData, CampoNumero, CampoCheckbox } from '@/components/campos'
+import { AvaliacaoForm } from '@/components/AvaliacaoForm'
 import {
   getEmbarcacao,
   updateEmbarcacao,
@@ -38,8 +39,10 @@ import {
   listCidadesPorEstado,
   getCidade,
   listNotificacoesDoChamado,
+  listAvaliacoesDoChamado,
 } from '@/lib/api'
 import type {
+  Avaliacao,
   CategoriaEquipamento,
   Chamado,
   ChamadoNotificacao,
@@ -189,6 +192,8 @@ export default function EmbarcacaoFicha() {
   const [recusandoVisitaId, setRecusandoVisitaId] = useState<string | null>(null)
   const [motivoRecusaVisita, setMotivoRecusaVisita] = useState('')
 
+  const [avaliacoesPorChamado, setAvaliacoesPorChamado] = useState<Record<string, Avaliacao[]>>({})
+
   async function carregar() {
     if (!id) return
     setCarregando(true)
@@ -224,6 +229,10 @@ export default function EmbarcacaoFicha() {
       setPerguntasPorChamado(Object.fromEntries(perguntasEntries))
       const visitasEntries = await Promise.all(ch.map(async (c) => [c.id, await listVisitasDoChamado(c.id)] as const))
       setVisitasPorChamado(Object.fromEntries(visitasEntries))
+      const avaliacoesEntries = await Promise.all(
+        ch.filter((c) => c.status === 'concluido').map(async (c) => [c.id, await listAvaliacoesDoChamado(c.id)] as const)
+      )
+      setAvaliacoesPorChamado(Object.fromEntries(avaliacoesEntries))
       if (emb) {
         setDetalhes({
           motorizacao: emb.motorizacao ?? '',
@@ -1002,6 +1011,16 @@ export default function EmbarcacaoFicha() {
                     {new Date(new Date(c.terminei_em).getTime() + 3 * 86400000).toLocaleDateString('pt-BR')}, se
                     ninguém responder.
                   </p>
+                )}
+
+                {c.status === 'concluido' && (
+                  <AvaliacaoForm
+                    chamadoId={c.id}
+                    papelAvaliado="prestador"
+                    minhaAvaliacao={avaliacoesPorChamado[c.id]?.find((a) => a.avaliador_id === meuPrestadorId)}
+                    rotulo="Avaliar prestador"
+                    onAvaliado={carregar}
+                  />
                 )}
 
                 {rejeitandoId === c.id && (
