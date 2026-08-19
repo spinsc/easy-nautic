@@ -622,7 +622,7 @@ export async function resolverDisputa(chamadoId: string, status: 'em_andamento' 
 export async function listPerguntasDoChamado(chamadoId: string): Promise<(ChamadoPergunta & { prestador_nome: string })[]> {
   const { data, error } = await supabase
     .from('chamado_perguntas')
-    .select('*, prestadores(nome)')
+    .select('*, prestadores!prestador_id(nome)')
     .eq('chamado_id', chamadoId)
     .order('criado_em')
   if (error) throw error
@@ -650,7 +650,7 @@ export async function responderPergunta(id: string, resposta: string, respondido
 export async function listVisitasDoChamado(chamadoId: string): Promise<(ChamadoVisita & { prestador_nome: string })[]> {
   const { data, error } = await supabase
     .from('chamado_visitas')
-    .select('*, prestadores(nome)')
+    .select('*, prestadores!prestador_id(nome)')
     .eq('chamado_id', chamadoId)
     .order('criado_em', { ascending: false })
   if (error) throw error
@@ -693,7 +693,7 @@ export async function listNotificacoesDoChamado(
 export async function listCotacoesDoChamado(chamadoId: string): Promise<(Cotacao & { prestador_nome: string })[]> {
   const { data, error } = await supabase
     .from('cotacoes')
-    .select('*, prestadores(nome)')
+    .select('*, prestadores!prestador_id(nome)')
     .eq('chamado_id', chamadoId)
     .order('criado_em', { ascending: false })
   if (error) throw error
