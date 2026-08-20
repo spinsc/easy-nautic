@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { cadastrarPrestador } from '@/lib/api'
 import { mensagemErro } from '@/lib/errors'
 import { CampoTexto, CampoSelect } from '@/components/campos'
+import { HeroCarousel } from '@/components/HeroCarousel'
+import { heroSlides } from '@/lib/heroSlides'
 import type { TipoPessoa } from '@/types'
 
 export default function Cadastro() {
@@ -51,53 +53,65 @@ export default function Cadastro() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-10">
-      <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-tide-600">Easy Nautic</p>
-        <h1 className="mb-6 font-display text-2xl text-slate-900">Cadastro de prestador</h1>
+    <div className="flex min-h-screen">
+      <div className="relative hidden w-1/2 md:block">
+        <HeroCarousel slides={heroSlides} />
+        <div className="absolute bottom-10 left-10 right-10 z-10">
+          <p className="text-[11px] uppercase tracking-[0.3em] text-tide-200">Easy Nautic</p>
+          <p className="mt-2 max-w-sm font-display text-2xl text-white">
+            Cadastre-se e receba solicitações de serviço da sua região.
+          </p>
+        </div>
+      </div>
 
-        {erro && (
-          <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {erro}
-          </div>
-        )}
+      <div className="flex w-full items-center justify-center bg-slate-50 px-6 py-10 md:w-1/2">
+        <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-tide-600 md:hidden">Easy Nautic</p>
+          <h1 className="mb-6 font-display text-2xl text-slate-900">Cadastro de prestador</h1>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <CampoSelect
-            label="Tipo de pessoa"
-            value={tipoPessoa}
-            onChange={(v) => setTipoPessoa(v as TipoPessoa)}
-            options={[
-              { value: 'PF', label: 'Pessoa física' },
-              { value: 'PJ', label: 'Pessoa jurídica' },
-            ]}
-          />
-          <CampoTexto label={tipoPessoa === 'PF' ? 'Nome completo' : 'Razão social'} value={nome} onChange={setNome} required />
-          <CampoTexto
-            label={tipoPessoa === 'PF' ? 'CPF' : 'CNPJ'}
-            value={cpfCnpj}
-            onChange={setCpfCnpj}
-            required
-          />
-          <CampoTexto label="Telefone" type="tel" value={telefone} onChange={setTelefone} required />
-          <CampoTexto label="E-mail" type="email" value={email} onChange={setEmail} required />
-          <CampoTexto label="Senha" type="password" value={senha} onChange={setSenha} required />
-          <CampoTexto label="Confirmar senha" type="password" value={confirmarSenha} onChange={setConfirmarSenha} required />
-          <button
-            type="submit"
-            disabled={enviando}
-            className="w-full rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
-          >
-            {enviando ? 'Enviando…' : 'Cadastrar'}
-          </button>
-        </form>
+          {erro && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {erro}
+            </div>
+          )}
 
-        <p className="mt-6 text-center text-sm text-slate-500">
-          Já tem conta?{' '}
-          <Link to="/login" className="font-medium text-tide-600 hover:text-tide-700">
-            Entrar
-          </Link>
-        </p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <CampoSelect
+              label="Tipo de pessoa"
+              value={tipoPessoa}
+              onChange={(v) => setTipoPessoa(v as TipoPessoa)}
+              options={[
+                { value: 'PF', label: 'Pessoa física' },
+                { value: 'PJ', label: 'Pessoa jurídica' },
+              ]}
+            />
+            <CampoTexto label={tipoPessoa === 'PF' ? 'Nome completo' : 'Razão social'} value={nome} onChange={setNome} required />
+            <CampoTexto
+              label={tipoPessoa === 'PF' ? 'CPF' : 'CNPJ'}
+              value={cpfCnpj}
+              onChange={setCpfCnpj}
+              required
+            />
+            <CampoTexto label="Telefone" type="tel" value={telefone} onChange={setTelefone} required />
+            <CampoTexto label="E-mail" type="email" value={email} onChange={setEmail} required />
+            <CampoTexto label="Senha" type="password" value={senha} onChange={setSenha} required />
+            <CampoTexto label="Confirmar senha" type="password" value={confirmarSenha} onChange={setConfirmarSenha} required />
+            <button
+              type="submit"
+              disabled={enviando}
+              className="w-full rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+            >
+              {enviando ? 'Enviando…' : 'Cadastrar'}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-slate-500">
+            Já tem conta?{' '}
+            <Link to="/login" className="font-medium text-tide-600 hover:text-tide-700">
+              Entrar
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )
