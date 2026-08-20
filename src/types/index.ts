@@ -72,6 +72,7 @@ export interface Prestador {
   telefone: string | null
   email: string | null
   status_verificacao: StatusVerificacao
+  representante_legal: string | null
   documentos_verificacao: DocumentoVerificacao[]
   formas_pagamento: FormaPagamento[]
   condicao_pagamento_padrao: string | null
@@ -309,6 +310,13 @@ export interface AdminNotificacaoStat {
   canal: 'email' | 'push'
   status: StatusNotificacao
   qtd: number
+}
+
+export interface TermosUso {
+  id: string
+  versao: number
+  conteudo: string
+  publicado_em: string
 }
 
 export type PapelAvaliado = 'prestador' | 'tomador'

@@ -16,6 +16,8 @@ export default function Cadastro() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [confirmarSenha, setConfirmarSenha] = useState('')
+  const [representanteLegal, setRepresentanteLegal] = useState('')
+  const [aceitouTermos, setAceitouTermos] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [precisaConfirmarEmail, setPrecisaConfirmarEmail] = useState(false)
@@ -29,7 +31,17 @@ export default function Cadastro() {
     setEnviando(true)
     setErro(null)
     try {
-      await cadastrarPrestador({ email, senha, tipo_pessoa: tipoPessoa, nome, cpf_cnpj: cpfCnpj, telefone })
+      await cadastrarPrestador({
+        email,
+        senha,
+        tipo_pessoa: tipoPessoa,
+        nome,
+        cpf_cnpj: cpfCnpj,
+        telefone,
+        representante_legal: tipoPessoa === 'PJ' ? representanteLegal : undefined,
+      })
+      // O aceite fica registrado de fato no primeiro login (tela de termos obrigatória),
+      // já que logo após o signUp ainda não existe sessão se a confirmação de e-mail está ligada.
       setPrecisaConfirmarEmail(true)
       setTimeout(() => navigate('/perfil'), 1200)
     } catch (e) {
@@ -92,13 +104,31 @@ export default function Cadastro() {
               onChange={setCpfCnpj}
               required
             />
+            {tipoPessoa === 'PJ' && (
+              <CampoTexto
+                label="Nome do representante legal"
+                value={representanteLegal}
+                onChange={setRepresentanteLegal}
+                required
+              />
+            )}
             <CampoTexto label="Telefone" type="tel" value={telefone} onChange={setTelefone} required />
             <CampoTexto label="E-mail" type="email" value={email} onChange={setEmail} required />
             <CampoTexto label="Senha" type="password" value={senha} onChange={setSenha} required />
             <CampoTexto label="Confirmar senha" type="password" value={confirmarSenha} onChange={setConfirmarSenha} required />
+            <label className="flex items-start gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={aceitouTermos}
+                onChange={(e) => setAceitouTermos(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-tide-700 focus:ring-tide-500"
+                required
+              />
+              Li e concordo com os termos de uso da plataforma.
+            </label>
             <button
               type="submit"
-              disabled={enviando}
+              disabled={enviando || !aceitouTermos}
               className="w-full rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
             >
               {enviando ? 'Enviando…' : 'Cadastrar'}

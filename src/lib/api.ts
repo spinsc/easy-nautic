@@ -30,6 +30,7 @@ import type {
   StatusCotacao,
   StatusVerificacao,
   StatusVisita,
+  TermosUso,
   TipoPessoa,
   TipoServico,
 } from '@/types'
@@ -47,6 +48,7 @@ export async function cadastrarPrestador(dados: {
   nome: string
   cpf_cnpj: string
   telefone: string
+  representante_legal?: string
 }): Promise<void> {
   // A linha em `prestadores` é criada por um trigger no banco (on_auth_user_created),
   // a partir de raw_user_meta_data — não por um insert daqui. Isso evita depender de uma
@@ -60,6 +62,7 @@ export async function cadastrarPrestador(dados: {
         nome: dados.nome,
         cpf_cnpj: dados.cpf_cnpj,
         telefone: dados.telefone,
+        representante_legal: dados.representante_legal || null,
       },
     },
   })
@@ -452,6 +455,34 @@ export async function atualizarStatusChamado(
   if (atendidoPor) patch.atendido_por = atendidoPor
   if (status === 'concluido') patch.concluido_em = new Date().toISOString()
   const { error } = await supabase.from('chamados').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+// ---------- Termos de uso ----------
+
+export async function getTermosVigente(): Promise<TermosUso | null> {
+  const { data, error } = await supabase.from('termos_uso').select('*').order('versao', { ascending: false }).limit(1).maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function jaAceitouTermos(termosId: string): Promise<boolean> {
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user) return false
+  const { data, error } = await supabase
+    .from('termos_aceites')
+    .select('id')
+    .eq('usuario_id', userData.user.id)
+    .eq('termos_id', termosId)
+    .maybeSingle()
+  if (error) throw error
+  return !!data
+}
+
+export async function aceitarTermos(termosId: string): Promise<void> {
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user) throw new Error('Não autenticado')
+  const { error } = await supabase.from('termos_aceites').insert({ usuario_id: userData.user.id, termos_id: termosId })
   if (error) throw error
 }
 

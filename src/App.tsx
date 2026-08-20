@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { AcessoGate } from '@/components/AcessoGate'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Cadastro from './pages/Cadastro'
@@ -38,11 +39,11 @@ export default function App() {
         <Route path="/b/:tagId" element={<EmbarcacaoPublica />} />
         <Route path="/login" element={session ? <Navigate to="/perfil" /> : <Login />} />
         <Route path="/cadastro" element={session ? <Navigate to="/perfil" /> : <Cadastro />} />
-        <Route path="/perfil" element={session ? <Perfil /> : <Navigate to="/login" />} />
-        <Route path="/embarcacoes" element={session ? <Embarcacoes /> : <Navigate to="/login" />} />
-        <Route path="/embarcacoes/:id" element={session ? <EmbarcacaoFicha /> : <Navigate to="/login" />} />
-        <Route path="/chamados" element={session ? <Chamados /> : <Navigate to="/login" />} />
-        <Route path="/admin" element={session ? <Admin /> : <Navigate to="/login" />} />
+        <Route path="/perfil" element={session ? <AcessoGate><Perfil /></AcessoGate> : <Navigate to="/login" />} />
+        <Route path="/embarcacoes" element={session ? <AcessoGate><Embarcacoes /></AcessoGate> : <Navigate to="/login" />} />
+        <Route path="/embarcacoes/:id" element={session ? <AcessoGate><EmbarcacaoFicha /></AcessoGate> : <Navigate to="/login" />} />
+        <Route path="/chamados" element={session ? <AcessoGate><Chamados /></AcessoGate> : <Navigate to="/login" />} />
+        <Route path="/admin" element={session ? <AcessoGate><Admin /></AcessoGate> : <Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
   )
