@@ -34,7 +34,7 @@ export async function solicitarTokenPush(): Promise<string | null> {
     throw new Error('Permissão de notificações negada.')
   }
 
-  const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js')
+  const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}firebase-messaging-sw.js`)
   const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration })
   return token || null
 }
