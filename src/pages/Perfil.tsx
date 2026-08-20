@@ -167,6 +167,10 @@ export default function Perfil() {
     (c) => !minhasCategorias.some((mc) => mc.categoria_servico_id === c.id)
   )
 
+  const nomeCategoriaSelecionada = categorias.find((c) => c.id === categoriaSelecionada)?.nome
+  const ehCategoriaDeDisponibilidade = nomeCategoriaSelecionada === 'Marinheiro' || nomeCategoriaSelecionada === 'Marina'
+  const ehCategoriaDeRevenda = nomeCategoriaSelecionada === 'Revendedor Autorizado'
+
   const marcasDisponiveis = marcasCatalogo.filter((m) => !minhasMarcas.some((mm) => mm.id === m.id))
 
   async function adicionarMarca() {
@@ -494,13 +498,29 @@ export default function Perfil() {
                 ...categoriasDisponiveis.map((c) => ({ value: c.id, label: c.nome })),
               ]}
             />
-            <CampoTexto label="Especialidade (opcional)" value={especialidade} onChange={setEspecialidade} />
-            <CampoTexto label="Região de atuação" value={regiaoAtuacao} onChange={setRegiaoAtuacao} />
-            <div>
-              <CampoTexto label="Marcas que atende (opcional)" value={marcasAtendidas} onChange={setMarcasAtendidas} />
-              <p className="mt-1 text-xs text-slate-400">Separe por vírgula — ex: Mercury, Volvo Penta.</p>
-            </div>
-            {categorias.find((c) => c.id === categoriaSelecionada)?.nome === 'Marinheiro' && (
+            {!ehCategoriaDeDisponibilidade && (
+              <>
+                <CampoTexto label="Especialidade (opcional)" value={especialidade} onChange={setEspecialidade} />
+                <CampoTexto label="Região de atuação" value={regiaoAtuacao} onChange={setRegiaoAtuacao} />
+                <div>
+                  <CampoTexto label="Marcas que atende (opcional)" value={marcasAtendidas} onChange={setMarcasAtendidas} />
+                  <p className="mt-1 text-xs text-slate-400">Separe por vírgula — ex: Mercury, Volvo Penta.</p>
+                </div>
+              </>
+            )}
+            {ehCategoriaDeDisponibilidade && (
+              <p className="text-xs text-slate-400">
+                Pra aparecer nas buscas por região, cadastre suas cidades de atendimento na seção "Regiões de
+                atendimento" mais abaixo, depois de salvar essa categoria.
+              </p>
+            )}
+            {ehCategoriaDeRevenda && (
+              <p className="text-xs text-slate-400">
+                Cadastre as marcas que você revende na seção "Marcas que atende" mais abaixo — é isso que faz
+                você aparecer quando alguém pede uma peça daquela marca.
+              </p>
+            )}
+            {nomeCategoriaSelecionada === 'Marinheiro' && (
               <div className="space-y-4 border-t border-slate-200 pt-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Dados de marinheiro</p>
                 <CampoTexto label="Categoria de habilitação" value={categoriaHabilitacao} onChange={setCategoriaHabilitacao} placeholder="ex: Arrais Amador" />

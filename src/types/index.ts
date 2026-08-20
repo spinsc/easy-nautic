@@ -178,6 +178,8 @@ export interface Chamado {
   id: string
   embarcacao_id: string
   equipamento_id: string | null
+  categoria_servico_id: string | null
+  marca_id: string | null
   tipo: TipoChamado
   descricao: string
   status: StatusChamado

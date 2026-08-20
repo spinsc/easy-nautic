@@ -428,11 +428,18 @@ export async function listChamadosDaEmbarcacao(embarcacaoId: string): Promise<Ch
 export async function criarChamado(
   embarcacaoId: string,
   descricao: string,
-  equipamentoId: string | null
+  equipamentoId: string | null,
+  categoriaServicoId?: string | null,
+  marcaId?: string | null
 ): Promise<void> {
-  const { error } = await supabase
-    .from('chamados')
-    .insert({ embarcacao_id: embarcacaoId, equipamento_id: equipamentoId, tipo: 'comercial', descricao })
+  const { error } = await supabase.from('chamados').insert({
+    embarcacao_id: embarcacaoId,
+    equipamento_id: equipamentoId,
+    categoria_servico_id: categoriaServicoId || null,
+    marca_id: marcaId || null,
+    tipo: 'comercial',
+    descricao,
+  })
   if (error) throw error
 }
 

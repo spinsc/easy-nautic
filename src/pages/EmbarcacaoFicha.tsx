@@ -44,6 +44,7 @@ import {
 import type {
   Avaliacao,
   CategoriaEquipamento,
+  CategoriaServico,
   Chamado,
   ChamadoNotificacao,
   ChamadoPergunta,
@@ -177,6 +178,10 @@ export default function EmbarcacaoFicha() {
   const [abrindoChamado, setAbrindoChamado] = useState(false)
   const [descricaoChamado, setDescricaoChamado] = useState('')
   const [equipamentoChamado, setEquipamentoChamado] = useState('')
+  const [tipoPedidoSemEquip, setTipoPedidoSemEquip] = useState('')
+  const [marcaChamado, setMarcaChamado] = useState('')
+  const [categoriaChamado, setCategoriaChamado] = useState('')
+  const [categoriasServico, setCategoriasServico] = useState<CategoriaServico[]>([])
 
   const [rejeicoesPorChamado, setRejeicoesPorChamado] = useState<Record<string, ChamadoRejeicao[]>>({})
   const [rejeitandoId, setRejeitandoId] = useState<string | null>(null)
@@ -217,6 +222,7 @@ export default function EmbarcacaoFicha() {
       setChamados(ch)
       setTripulacao(trip)
       setMeuPrestadorId(meuPrestador?.id ?? null)
+      setCategoriasServico(cats)
       const cotacoesEntries = await Promise.all(ch.map(async (c) => [c.id, await listCotacoesDoChamado(c.id)] as const))
       setCotacoesPorChamado(Object.fromEntries(cotacoesEntries))
       const notificacoesEntries = await Promise.all(ch.map(async (c) => [c.id, await listNotificacoesDoChamado(c.id)] as const))
@@ -512,9 +518,14 @@ export default function EmbarcacaoFicha() {
   async function salvarChamado() {
     if (!id || !descricaoChamado.trim()) return
     try {
-      await criarChamado(id, descricaoChamado.trim(), equipamentoChamado || null)
+      const categoriaServicoId = !equipamentoChamado && tipoPedidoSemEquip === 'categoria' ? categoriaChamado : null
+      const marcaId = !equipamentoChamado && tipoPedidoSemEquip === 'peca' ? marcaChamado : null
+      await criarChamado(id, descricaoChamado.trim(), equipamentoChamado || null, categoriaServicoId, marcaId)
       setDescricaoChamado('')
       setEquipamentoChamado('')
+      setTipoPedidoSemEquip('')
+      setMarcaChamado('')
+      setCategoriaChamado('')
       setAbrindoChamado(false)
       await carregar()
     } catch (e) {
@@ -934,6 +945,36 @@ export default function EmbarcacaoFicha() {
                   ...equipamentos.map((eq) => ({ value: eq.id, label: `${CATEGORIA_LABELS[eq.categoria]} — ${eq.nome}` })),
                 ]}
               />
+            )}
+            {!equipamentoChamado && (
+              <>
+                <CampoSelect
+                  label="Tipo de pedido"
+                  value={tipoPedidoSemEquip}
+                  onChange={setTipoPedidoSemEquip}
+                  options={[
+                    { value: '', label: 'Serviço geral' },
+                    { value: 'peca', label: 'Peça / equipamento por marca' },
+                    { value: 'categoria', label: 'Serviço por categoria (ex: Marinheiro, Marina)' },
+                  ]}
+                />
+                {tipoPedidoSemEquip === 'peca' && (
+                  <CampoSelect
+                    label="Marca da peça"
+                    value={marcaChamado}
+                    onChange={setMarcaChamado}
+                    options={[{ value: '', label: 'Selecione…' }, ...marcasCatalogo.map((m) => ({ value: m.id, label: m.nome }))]}
+                  />
+                )}
+                {tipoPedidoSemEquip === 'categoria' && (
+                  <CampoSelect
+                    label="Categoria de serviço"
+                    value={categoriaChamado}
+                    onChange={setCategoriaChamado}
+                    options={[{ value: '', label: 'Selecione…' }, ...categoriasServico.map((c) => ({ value: c.id, label: c.nome }))]}
+                  />
+                )}
+              </>
             )}
             <CampoTexto label="Descreva o problema" value={descricaoChamado} onChange={setDescricaoChamado} />
             <div className="flex gap-2">
