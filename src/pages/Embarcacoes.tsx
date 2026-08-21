@@ -13,6 +13,51 @@ import {
 import { CampoTexto, CampoNumero, CampoData, CampoSelect } from '@/components/campos'
 import type { Cidade, Embarcacao, Estado } from '@/types'
 
+type StatusGarantia = 'valida' | 'vencendo' | 'vencida'
+
+function garantiaDaEmbarcacao(e: Embarcacao): { venceEm: Date; status: StatusGarantia } | null {
+  if (!e.data_venda || !e.prazo_garantia_casco_meses) return null
+  const venceEm = new Date(e.data_venda)
+  venceEm.setMonth(venceEm.getMonth() + e.prazo_garantia_casco_meses)
+  const diasRestantes = Math.ceil((venceEm.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  const status: StatusGarantia = diasRestantes < 0 ? 'vencida' : diasRestantes <= 60 ? 'vencendo' : 'valida'
+  return { venceEm, status }
+}
+
+const ROTULO_GARANTIA: Record<StatusGarantia, string> = {
+  valida: 'Garantia válida',
+  vencendo: 'Garantia vence em breve',
+  vencida: 'Garantia vencida',
+}
+
+const COR_GARANTIA: Record<StatusGarantia, string> = {
+  valida: 'bg-green-50 text-green-700 border-green-200',
+  vencendo: 'bg-amber-50 text-amber-700 border-amber-200',
+  vencida: 'bg-red-50 text-red-700 border-red-200',
+}
+
+function BadgeGarantia({ embarcacao }: { embarcacao: Embarcacao }) {
+  const garantia = garantiaDaEmbarcacao(embarcacao)
+  if (!garantia) return <span className="text-xs text-slate-400">—</span>
+  return (
+    <span className={`inline-block rounded-full border px-2 py-0.5 text-xs font-medium ${COR_GARANTIA[garantia.status]}`}>
+      {ROTULO_GARANTIA[garantia.status]} · {garantia.venceEm.toLocaleDateString('pt-BR')}
+    </span>
+  )
+}
+
+function gruposPorProprietario(itens: Embarcacao[]) {
+  const mapa = new Map<string, { chave: string; nome: string; telefone: string | null; email: string | null; embarcacoes: Embarcacao[] }>()
+  for (const e of itens) {
+    const chave = e.proprietario_id ?? e.cliente_nome
+    if (!mapa.has(chave)) {
+      mapa.set(chave, { chave, nome: e.cliente_nome, telefone: e.cliente_telefone, email: e.cliente_email, embarcacoes: [] })
+    }
+    mapa.get(chave)!.embarcacoes.push(e)
+  }
+  return [...mapa.values()].sort((a, b) => a.nome.localeCompare(b.nome))
+}
+
 const EMBARCACAO_VAZIA = {
   cliente_nome: '',
   cliente_telefone: '',
@@ -163,14 +208,55 @@ export default function Embarcacoes() {
         <p className="text-sm text-slate-400">Carregando…</p>
       ) : itens.length === 0 ? (
         <p className="text-sm text-slate-400">Nenhuma embarcação cadastrada ainda.</p>
+      ) : ehEstaleiro ? (
+        <div className="space-y-6">
+          {gruposPorProprietario(itens).map((grupo) => (
+            <div key={grupo.chave} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-sm font-medium text-slate-900">{grupo.nome}</p>
+                <p className="text-xs text-slate-500">
+                  {[grupo.telefone, grupo.email].filter(Boolean).join(' · ') || 'Sem contato cadastrado'}
+                </p>
+              </div>
+              <table className="w-full text-left text-sm">
+                <thead className="text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">Embarcação</th>
+                    <th className="px-4 py-2 font-medium">Fabricante/Modelo</th>
+                    <th className="px-4 py-2 font-medium">Garantia do casco</th>
+                    <th className="px-4 py-2 font-medium" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {grupo.embarcacoes.map((e) => (
+                    <tr key={e.id}>
+                      <td className="px-4 py-3 text-slate-900">{e.nome}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {[e.fabricante, e.modelo].filter(Boolean).join(' ') || '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <BadgeGarantia embarcacao={e} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link to={`/embarcacoes/${e.id}`} className="text-sm font-medium text-tide-600 hover:text-tide-700">
+                          Abrir
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium">Nome</th>
-                <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Fabricante/Modelo</th>
+                <th className="px-4 py-3 font-medium">Garantia do casco</th>
                 <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
@@ -178,9 +264,11 @@ export default function Embarcacoes() {
               {itens.map((e) => (
                 <tr key={e.id}>
                   <td className="px-4 py-3 text-slate-900">{e.nome}</td>
-                  <td className="px-4 py-3 text-slate-600">{e.cliente_nome}</td>
                   <td className="px-4 py-3 text-slate-600">
                     {[e.fabricante, e.modelo].filter(Boolean).join(' ') || '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <BadgeGarantia embarcacao={e} />
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link to={`/embarcacoes/${e.id}`} className="text-sm font-medium text-tide-600 hover:text-tide-700">
