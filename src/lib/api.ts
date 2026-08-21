@@ -22,12 +22,14 @@ import type {
   EquipamentoEmbarcado,
   Estado,
   FormaPagamento,
+  FormaPagamentoCatalogo,
   Marca,
   PapelAvaliado,
   Prestador,
   PrestadorCategoria,
   PrestadorMembro,
   PushSubscription,
+  RegiaoMacro,
   StatusCotacao,
   StatusVerificacao,
   StatusVisita,
@@ -866,4 +868,131 @@ export async function abrirChamadoPorTag(
   })
   if (error) throw error
   return data as string
+}
+
+// ---------- Admin: catálogos ----------
+
+export async function criarCategoriaServico(nome: string, descricao?: string): Promise<CategoriaServico> {
+  const { data: max } = await supabase.from('categorias_servico').select('ordem').order('ordem', { ascending: false }).limit(1).maybeSingle()
+  const { data, error } = await supabase
+    .from('categorias_servico')
+    .insert({ nome, descricao: descricao || null, ordem: (max?.ordem ?? 0) + 1 })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function atualizarCategoriaServico(id: string, patch: Partial<Pick<CategoriaServico, 'nome' | 'descricao' | 'ordem'>>): Promise<void> {
+  const { error } = await supabase.from('categorias_servico').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+export async function removerCategoriaServico(id: string): Promise<void> {
+  const { error } = await supabase.from('categorias_servico').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function criarMarca(nome: string): Promise<Marca> {
+  const { data, error } = await supabase.from('marcas').insert({ nome }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function atualizarMarca(id: string, nome: string): Promise<void> {
+  const { error } = await supabase.from('marcas').update({ nome }).eq('id', id)
+  if (error) throw error
+}
+
+export async function removerMarca(id: string): Promise<void> {
+  const { error } = await supabase.from('marcas').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listFormasPagamentoCatalogo(): Promise<FormaPagamentoCatalogo[]> {
+  const { data, error } = await supabase.from('formas_pagamento_catalogo').select('*').order('ordem')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function criarFormaPagamentoCatalogo(nome: string): Promise<FormaPagamentoCatalogo> {
+  const { data: max } = await supabase
+    .from('formas_pagamento_catalogo')
+    .select('ordem')
+    .order('ordem', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const { data, error } = await supabase
+    .from('formas_pagamento_catalogo')
+    .insert({ nome, ordem: (max?.ordem ?? 0) + 1 })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function atualizarFormaPagamentoCatalogo(id: string, patch: Partial<Pick<FormaPagamentoCatalogo, 'nome' | 'ordem'>>): Promise<void> {
+  const { error } = await supabase.from('formas_pagamento_catalogo').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+export async function removerFormaPagamentoCatalogo(id: string): Promise<void> {
+  const { error } = await supabase.from('formas_pagamento_catalogo').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listRegioesMacro(): Promise<RegiaoMacro[]> {
+  const { data, error } = await supabase.from('regioes_macro').select('*').order('nome')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function criarRegiaoMacro(nome: string): Promise<RegiaoMacro> {
+  const { data, error } = await supabase.from('regioes_macro').insert({ nome }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function removerRegiaoMacro(id: string): Promise<void> {
+  const { error } = await supabase.from('regioes_macro').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listCidadesDaRegiaoMacro(regiaoMacroId: string): Promise<(Cidade & { sigla_estado: string })[]> {
+  const { data, error } = await supabase
+    .from('regiao_macro_cidades')
+    .select('cidades(*, estados(sigla))')
+    .eq('regiao_macro_id', regiaoMacroId)
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const c = row.cidades as unknown as Cidade & { estados: { sigla: string } | null }
+    const { estados, ...cidade } = c
+    return { ...cidade, sigla_estado: estados?.sigla ?? '' }
+  })
+}
+
+export async function addCidadeNaRegiaoMacro(regiaoMacroId: string, cidadeId: number): Promise<void> {
+  const { error } = await supabase.from('regiao_macro_cidades').insert({ regiao_macro_id: regiaoMacroId, cidade_id: cidadeId })
+  if (error) throw error
+}
+
+export async function removeCidadeDaRegiaoMacro(regiaoMacroId: string, cidadeId: number): Promise<void> {
+  const { error } = await supabase
+    .from('regiao_macro_cidades')
+    .delete()
+    .eq('regiao_macro_id', regiaoMacroId)
+    .eq('cidade_id', cidadeId)
+  if (error) throw error
+}
+
+export async function addMinhasRegioesPorMacro(prestadorId: string, regiaoMacroId: string): Promise<void> {
+  const cidades = await listCidadesDaRegiaoMacro(regiaoMacroId)
+  if (cidades.length === 0) return
+  const { error } = await supabase
+    .from('prestador_regioes')
+    .upsert(
+      cidades.map((c) => ({ prestador_id: prestadorId, cidade_id: c.id })),
+      { onConflict: 'prestador_id,cidade_id', ignoreDuplicates: true }
+    )
+  if (error) throw error
 }

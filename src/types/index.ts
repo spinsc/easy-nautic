@@ -321,6 +321,19 @@ export interface PrestadorMembro {
   criado_em: string
 }
 
+export interface FormaPagamentoCatalogo {
+  id: string
+  nome: string
+  ordem: number
+  criado_em: string
+}
+
+export interface RegiaoMacro {
+  id: string
+  nome: string
+  criado_em: string
+}
+
 export interface TermosUso {
   id: string
   versao: number

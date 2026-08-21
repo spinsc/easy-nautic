@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CartesianGrid,
@@ -25,6 +25,26 @@ import {
   getSerieTemporal,
   getNotificacoesStats,
   criarUsuarioAdmin,
+  listCategoriasServico,
+  criarCategoriaServico,
+  atualizarCategoriaServico,
+  removerCategoriaServico,
+  listMarcas,
+  criarMarca,
+  atualizarMarca,
+  removerMarca,
+  listFormasPagamentoCatalogo,
+  criarFormaPagamentoCatalogo,
+  atualizarFormaPagamentoCatalogo,
+  removerFormaPagamentoCatalogo,
+  listRegioesMacro,
+  criarRegiaoMacro,
+  removerRegiaoMacro,
+  listCidadesDaRegiaoMacro,
+  addCidadeNaRegiaoMacro,
+  removeCidadeDaRegiaoMacro,
+  listEstados,
+  listCidadesPorEstado,
 } from '@/lib/api'
 import type {
   AdminDashboardKpis,
@@ -32,8 +52,14 @@ import type {
   AdminNegocioPrestador,
   AdminNotificacaoStat,
   AdminSerieTemporalPonto,
+  CategoriaServico,
   Chamado,
+  Cidade,
+  Estado,
+  FormaPagamentoCatalogo,
+  Marca,
   Prestador,
+  RegiaoMacro,
   StatusChamado,
   StatusVerificacao,
   TipoPessoa,
@@ -71,7 +97,7 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
 }
 
 export default function Admin() {
-  const [aba, setAba] = useState<'dashboard' | 'moderacao' | 'usuarios'>('dashboard')
+  const [aba, setAba] = useState<'dashboard' | 'moderacao' | 'usuarios' | 'catalogos'>('dashboard')
   const [autorizado, setAutorizado] = useState<boolean | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
@@ -220,7 +246,7 @@ export default function Admin() {
       </header>
 
       <div className="mb-8 flex gap-1 rounded-md border border-slate-200 p-1" style={{ width: 'fit-content' }}>
-        {(['dashboard', 'moderacao', 'usuarios'] as const).map((a) => (
+        {(['dashboard', 'moderacao', 'usuarios', 'catalogos'] as const).map((a) => (
           <button
             key={a}
             onClick={() => setAba(a)}
@@ -228,7 +254,7 @@ export default function Admin() {
               aba === a ? 'bg-tide-700 text-white' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            {a === 'dashboard' ? 'Dashboard' : a === 'moderacao' ? 'Moderação' : 'Usuários'}
+            {a === 'dashboard' ? 'Dashboard' : a === 'moderacao' ? 'Moderação' : a === 'usuarios' ? 'Usuários' : 'Catálogos'}
           </button>
         ))}
       </div>
@@ -541,6 +567,443 @@ export default function Admin() {
           </div>
         </section>
       )}
+
+      {aba === 'catalogos' && <PainelCatalogos />}
+    </div>
+  )
+}
+
+function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <section className="mb-10">
+      <h2 className="mb-4 font-display text-lg text-slate-900">{titulo}</h2>
+      {children}
+    </section>
+  )
+}
+
+function LinhaCrud({
+  children,
+  onRemover,
+}: {
+  children: ReactNode
+  onRemover: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2 last:border-0">
+      <div className="flex flex-1 items-center gap-3">{children}</div>
+      <button onClick={onRemover} className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700">
+        Remover
+      </button>
+    </div>
+  )
+}
+
+function PainelCatalogos() {
+  const [erro, setErro] = useState<string | null>(null)
+  const [carregando, setCarregando] = useState(true)
+
+  const [categorias, setCategorias] = useState<CategoriaServico[]>([])
+  const [novaCategoria, setNovaCategoria] = useState('')
+
+  const [marcas, setMarcas] = useState<Marca[]>([])
+  const [novaMarca, setNovaMarca] = useState('')
+
+  const [formasPagamento, setFormasPagamento] = useState<FormaPagamentoCatalogo[]>([])
+  const [novaFormaPagamento, setNovaFormaPagamento] = useState('')
+
+  const [regioesMacro, setRegioesMacro] = useState<RegiaoMacro[]>([])
+  const [novaRegiaoMacro, setNovaRegiaoMacro] = useState('')
+  const [regiaoExpandida, setRegiaoExpandida] = useState<string | null>(null)
+  const [cidadesDaRegiao, setCidadesDaRegiao] = useState<(Cidade & { sigla_estado: string })[]>([])
+  const [estados, setEstados] = useState<Estado[]>([])
+  const [estadoParaAdicionar, setEstadoParaAdicionar] = useState('')
+  const [cidadesDoEstado, setCidadesDoEstado] = useState<Cidade[]>([])
+  const [cidadeParaAdicionar, setCidadeParaAdicionar] = useState('')
+
+  async function carregar() {
+    setCarregando(true)
+    try {
+      const [c, m, fp, rm, es] = await Promise.all([
+        listCategoriasServico(),
+        listMarcas(),
+        listFormasPagamentoCatalogo(),
+        listRegioesMacro(),
+        listEstados(),
+      ])
+      setCategorias(c)
+      setMarcas(m)
+      setFormasPagamento(fp)
+      setRegioesMacro(rm)
+      setEstados(es)
+      setErro(null)
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao carregar catálogos'))
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  useEffect(() => {
+    carregar()
+  }, [])
+
+  async function expandirRegiao(id: string) {
+    if (regiaoExpandida === id) {
+      setRegiaoExpandida(null)
+      return
+    }
+    setRegiaoExpandida(id)
+    setEstadoParaAdicionar('')
+    setCidadesDoEstado([])
+    setCidadeParaAdicionar('')
+    try {
+      setCidadesDaRegiao(await listCidadesDaRegiaoMacro(id))
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao carregar cidades da região'))
+    }
+  }
+
+  async function onEstadoParaAdicionar(estadoId: string) {
+    setEstadoParaAdicionar(estadoId)
+    setCidadeParaAdicionar('')
+    if (!estadoId) {
+      setCidadesDoEstado([])
+      return
+    }
+    try {
+      setCidadesDoEstado(await listCidadesPorEstado(Number(estadoId)))
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao carregar cidades'))
+    }
+  }
+
+  if (carregando) return <p className="text-sm text-slate-400">Carregando…</p>
+
+  return (
+    <div className="max-w-3xl">
+      {erro && (
+        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</div>
+      )}
+
+      <Secao titulo="Categorias de atuação">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          {categorias.length === 0 && <p className="p-4 text-sm text-slate-400">Nenhuma categoria cadastrada.</p>}
+          {categorias.map((c) => (
+            <LinhaCrud
+              key={c.id}
+              onRemover={async () => {
+                try {
+                  await removerCategoriaServico(c.id)
+                  await carregar()
+                } catch (e) {
+                  setErro(mensagemErro(e, 'Erro ao remover categoria'))
+                }
+              }}
+            >
+              <input
+                defaultValue={c.nome}
+                onBlur={async (e) => {
+                  const nome = e.target.value.trim()
+                  if (!nome || nome === c.nome) return
+                  try {
+                    await atualizarCategoriaServico(c.id, { nome })
+                    await carregar()
+                  } catch (err) {
+                    setErro(mensagemErro(err, 'Erro ao atualizar categoria'))
+                  }
+                }}
+                className="flex-1 rounded border border-transparent px-2 py-1 text-sm hover:border-slate-200 focus:border-tide-400 focus:outline-none"
+              />
+              <input
+                type="number"
+                defaultValue={c.ordem}
+                title="Ordem"
+                onBlur={async (e) => {
+                  const ordem = Number(e.target.value)
+                  if (Number.isNaN(ordem) || ordem === c.ordem) return
+                  try {
+                    await atualizarCategoriaServico(c.id, { ordem })
+                    await carregar()
+                  } catch (err) {
+                    setErro(mensagemErro(err, 'Erro ao atualizar categoria'))
+                  }
+                }}
+                className="w-16 rounded border border-transparent px-2 py-1 text-right text-sm hover:border-slate-200 focus:border-tide-400 focus:outline-none"
+              />
+            </LinhaCrud>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={novaCategoria}
+            onChange={(e) => setNovaCategoria(e.target.value)}
+            placeholder="Nova categoria"
+            className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+          />
+          <button
+            onClick={async () => {
+              if (!novaCategoria.trim()) return
+              try {
+                await criarCategoriaServico(novaCategoria.trim())
+                setNovaCategoria('')
+                await carregar()
+              } catch (e) {
+                setErro(mensagemErro(e, 'Erro ao criar categoria'))
+              }
+            }}
+            className="rounded-md bg-tide-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-tide-800"
+          >
+            Adicionar
+          </button>
+        </div>
+      </Secao>
+
+      <Secao titulo="Marcas que atende">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          {marcas.length === 0 && <p className="p-4 text-sm text-slate-400">Nenhuma marca cadastrada.</p>}
+          {marcas.map((m) => (
+            <LinhaCrud
+              key={m.id}
+              onRemover={async () => {
+                try {
+                  await removerMarca(m.id)
+                  await carregar()
+                } catch (e) {
+                  setErro(mensagemErro(e, 'Erro ao remover marca'))
+                }
+              }}
+            >
+              <input
+                defaultValue={m.nome}
+                onBlur={async (e) => {
+                  const nome = e.target.value.trim()
+                  if (!nome || nome === m.nome) return
+                  try {
+                    await atualizarMarca(m.id, nome)
+                    await carregar()
+                  } catch (err) {
+                    setErro(mensagemErro(err, 'Erro ao atualizar marca'))
+                  }
+                }}
+                className="flex-1 rounded border border-transparent px-2 py-1 text-sm hover:border-slate-200 focus:border-tide-400 focus:outline-none"
+              />
+            </LinhaCrud>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={novaMarca}
+            onChange={(e) => setNovaMarca(e.target.value)}
+            placeholder="Nova marca"
+            className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+          />
+          <button
+            onClick={async () => {
+              if (!novaMarca.trim()) return
+              try {
+                await criarMarca(novaMarca.trim())
+                setNovaMarca('')
+                await carregar()
+              } catch (e) {
+                setErro(mensagemErro(e, 'Erro ao criar marca'))
+              }
+            }}
+            className="rounded-md bg-tide-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-tide-800"
+          >
+            Adicionar
+          </button>
+        </div>
+      </Secao>
+
+      <Secao titulo="Formas de pagamento">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          {formasPagamento.length === 0 && <p className="p-4 text-sm text-slate-400">Nenhuma forma cadastrada.</p>}
+          {formasPagamento.map((f) => (
+            <LinhaCrud
+              key={f.id}
+              onRemover={async () => {
+                try {
+                  await removerFormaPagamentoCatalogo(f.id)
+                  await carregar()
+                } catch (e) {
+                  setErro(mensagemErro(e, 'Erro ao remover forma de pagamento'))
+                }
+              }}
+            >
+              <input
+                defaultValue={f.nome}
+                onBlur={async (e) => {
+                  const nome = e.target.value.trim()
+                  if (!nome || nome === f.nome) return
+                  try {
+                    await atualizarFormaPagamentoCatalogo(f.id, { nome })
+                    await carregar()
+                  } catch (err) {
+                    setErro(mensagemErro(err, 'Erro ao atualizar forma de pagamento'))
+                  }
+                }}
+                className="flex-1 rounded border border-transparent px-2 py-1 text-sm hover:border-slate-200 focus:border-tide-400 focus:outline-none"
+              />
+            </LinhaCrud>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={novaFormaPagamento}
+            onChange={(e) => setNovaFormaPagamento(e.target.value)}
+            placeholder="Nova forma de pagamento"
+            className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+          />
+          <button
+            onClick={async () => {
+              if (!novaFormaPagamento.trim()) return
+              try {
+                await criarFormaPagamentoCatalogo(novaFormaPagamento.trim())
+                setNovaFormaPagamento('')
+                await carregar()
+              } catch (e) {
+                setErro(mensagemErro(e, 'Erro ao criar forma de pagamento'))
+              }
+            }}
+            className="rounded-md bg-tide-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-tide-800"
+          >
+            Adicionar
+          </button>
+        </div>
+      </Secao>
+
+      <Secao titulo="Regiões macro">
+        <p className="mb-3 -mt-2 text-xs text-slate-400">
+          Agrupe cidades sob um nome (ex: "Grande Florianópolis") pra o prestador marcar a região inteira de uma vez
+          nas suas "Regiões de atendimento".
+        </p>
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          {regioesMacro.length === 0 && <p className="p-4 text-sm text-slate-400">Nenhuma região macro cadastrada.</p>}
+          {regioesMacro.map((r) => (
+            <div key={r.id} className="border-b border-slate-100 last:border-0">
+              <div className="flex items-center justify-between gap-3 px-4 py-2">
+                <button
+                  onClick={() => expandirRegiao(r.id)}
+                  className="flex-1 text-left text-sm font-medium text-slate-900 hover:text-tide-700"
+                >
+                  {r.nome} {regiaoExpandida === r.id ? '▲' : '▼'}
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await removerRegiaoMacro(r.id)
+                      await carregar()
+                    } catch (e) {
+                      setErro(mensagemErro(e, 'Erro ao remover região macro'))
+                    }
+                  }}
+                  className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700"
+                >
+                  Remover
+                </button>
+              </div>
+              {regiaoExpandida === r.id && (
+                <div className="border-t border-slate-100 bg-slate-50 px-4 py-3">
+                  {cidadesDaRegiao.length === 0 ? (
+                    <p className="mb-2 text-xs text-slate-400">Nenhuma cidade nessa região ainda.</p>
+                  ) : (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {cidadesDaRegiao.map((c) => (
+                        <span
+                          key={c.id}
+                          className="flex items-center gap-1 rounded-full bg-white border border-slate-200 px-2 py-1 text-xs text-slate-700"
+                        >
+                          {c.nome}/{c.sigla_estado}
+                          <button
+                            onClick={async () => {
+                              try {
+                                await removeCidadeDaRegiaoMacro(r.id, c.id)
+                                setCidadesDaRegiao(await listCidadesDaRegiaoMacro(r.id))
+                              } catch (e) {
+                                setErro(mensagemErro(e, 'Erro ao remover cidade'))
+                              }
+                            }}
+                            className="text-slate-400 hover:text-red-600"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <select
+                      value={estadoParaAdicionar}
+                      onChange={(e) => onEstadoParaAdicionar(e.target.value)}
+                      className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">Estado…</option>
+                      {estados.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.nome}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={cidadeParaAdicionar}
+                      onChange={(e) => setCidadeParaAdicionar(e.target.value)}
+                      disabled={!estadoParaAdicionar}
+                      className="flex-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm disabled:opacity-50"
+                    >
+                      <option value="">{estadoParaAdicionar ? 'Cidade…' : 'Escolha um estado antes'}</option>
+                      {cidadesDoEstado.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={async () => {
+                        if (!cidadeParaAdicionar) return
+                        try {
+                          await addCidadeNaRegiaoMacro(r.id, Number(cidadeParaAdicionar))
+                          setCidadesDaRegiao(await listCidadesDaRegiaoMacro(r.id))
+                          setCidadeParaAdicionar('')
+                        } catch (e) {
+                          setErro(mensagemErro(e, 'Erro ao adicionar cidade'))
+                        }
+                      }}
+                      disabled={!cidadeParaAdicionar}
+                      className="shrink-0 rounded-md bg-tide-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={novaRegiaoMacro}
+            onChange={(e) => setNovaRegiaoMacro(e.target.value)}
+            placeholder="Nova região macro (ex: Grande Florianópolis)"
+            className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+          />
+          <button
+            onClick={async () => {
+              if (!novaRegiaoMacro.trim()) return
+              try {
+                await criarRegiaoMacro(novaRegiaoMacro.trim())
+                setNovaRegiaoMacro('')
+                await carregar()
+              } catch (e) {
+                setErro(mensagemErro(e, 'Erro ao criar região macro'))
+              }
+            }}
+            className="rounded-md bg-tide-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-tide-800"
+          >
+            Adicionar
+          </button>
+        </div>
+      </Secao>
     </div>
   )
 }

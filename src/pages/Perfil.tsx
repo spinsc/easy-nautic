@@ -22,6 +22,8 @@ import {
   listMinhasRegioes,
   addMinhaRegiao,
   removeMinhaRegiao,
+  listRegioesMacro,
+  addMinhasRegioesPorMacro,
   listMinhasAssinaturasPush,
   salvarTokenPush,
   removerTokenPush,
@@ -41,6 +43,7 @@ import type {
   PrestadorCategoria,
   PrestadorMembro,
   PushSubscription,
+  RegiaoMacro,
   StatusVerificacao,
 } from '@/types'
 
@@ -105,6 +108,9 @@ export default function Perfil() {
   const [estadoSelecionado, setEstadoSelecionado] = useState('')
   const [cidadesDoEstado, setCidadesDoEstado] = useState<Cidade[]>([])
   const [cidadeSelecionada, setCidadeSelecionada] = useState('')
+  const [regioesMacro, setRegioesMacro] = useState<RegiaoMacro[]>([])
+  const [regiaoMacroSelecionada, setRegiaoMacroSelecionada] = useState('')
+  const [adicionandoRegiaoMacro, setAdicionandoRegiaoMacro] = useState(false)
 
   const [assinaturasPush, setAssinaturasPush] = useState<PushSubscription[]>([])
   const [ativandoPush, setAtivandoPush] = useState(false)
@@ -143,6 +149,7 @@ export default function Perfil() {
           assinaturasProprias,
           avaliacaoComoTomador,
           membrosDaEmpresa,
+          listaRegioesMacro,
         ] = await Promise.all([
           listCategoriasServico(),
           listPrestadorCategorias(contextoId),
@@ -154,6 +161,7 @@ export default function Perfil() {
           listMinhasAssinaturasPush(p.id),
           getMinhaAvaliacaoComoTomador(),
           p.tipo_pessoa === 'PJ' ? listMembrosDaEmpresa(p.id) : Promise.resolve([]),
+          listRegioesMacro(),
         ])
         setCategorias(cats)
         setMinhasCategorias(minhas)
@@ -165,6 +173,7 @@ export default function Perfil() {
         setAssinaturasPush(assinaturasProprias)
         setAvaliacaoTomador(avaliacaoComoTomador)
         setMembros(membrosDaEmpresa)
+        setRegioesMacro(listaRegioesMacro)
       }
       setErro(null)
     } catch (e) {
@@ -256,6 +265,20 @@ export default function Perfil() {
       await carregar()
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao remover região'))
+    }
+  }
+
+  async function adicionarRegiaoMacro() {
+    if (!contextoId || !regiaoMacroSelecionada) return
+    setAdicionandoRegiaoMacro(true)
+    try {
+      await addMinhasRegioesPorMacro(contextoId, regiaoMacroSelecionada)
+      setRegiaoMacroSelecionada('')
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao adicionar região macro'))
+    } finally {
+      setAdicionandoRegiaoMacro(false)
     }
   }
 
@@ -710,6 +733,25 @@ export default function Perfil() {
             </button>
           </div>
         </div>
+        {regioesMacro.length > 0 && (
+          <div className="mt-4 flex items-end gap-2 border-t border-slate-100 pt-4">
+            <div className="flex-1">
+              <CampoSelect
+                label="Ou marque uma região inteira"
+                value={regiaoMacroSelecionada}
+                onChange={setRegiaoMacroSelecionada}
+                options={[{ value: '', label: 'Selecione…' }, ...regioesMacro.map((r) => ({ value: r.id, label: r.nome }))]}
+              />
+            </div>
+            <button
+              onClick={adicionarRegiaoMacro}
+              disabled={!regiaoMacroSelecionada || adicionandoRegiaoMacro}
+              className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+            >
+              {adicionandoRegiaoMacro ? 'Adicionando…' : 'Adicionar todas'}
+            </button>
+          </div>
+        )}
       </section>
 
       {prestador.tipo_pessoa === 'PJ' && (
