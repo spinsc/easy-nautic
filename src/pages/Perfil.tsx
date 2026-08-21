@@ -199,7 +199,8 @@ export default function Perfil() {
   )
 
   const nomeCategoriaSelecionada = categorias.find((c) => c.id === categoriaSelecionada)?.nome
-  const ehCategoriaDeDisponibilidade = nomeCategoriaSelecionada === 'Marinheiro' || nomeCategoriaSelecionada === 'Marina'
+  const ehCategoriaDeDisponibilidade =
+    nomeCategoriaSelecionada === 'Marinheiro' || nomeCategoriaSelecionada === 'Marina' || nomeCategoriaSelecionada === 'Corretor'
   const ehCategoriaDeRevenda = nomeCategoriaSelecionada === 'Revendedor Autorizado'
 
   const marcasDisponiveis = marcasCatalogo.filter((m) => !minhasMarcas.some((mm) => mm.id === m.id))
