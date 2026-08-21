@@ -26,6 +26,7 @@ import type {
   PapelAvaliado,
   Prestador,
   PrestadorCategoria,
+  PrestadorMembro,
   PushSubscription,
   StatusCotacao,
   StatusVerificacao,
@@ -456,6 +457,65 @@ export async function atualizarStatusChamado(
   if (status === 'concluido') patch.concluido_em = new Date().toISOString()
   const { error } = await supabase.from('chamados').update(patch).eq('id', id)
   if (error) throw error
+}
+
+// ---------- Funcionários autorizados por empresa (PJ) ----------
+
+export async function criarMembroEmpresa(dados: {
+  email: string
+  senha: string
+  nome: string
+  telefone?: string
+  papel?: string
+}): Promise<{ id: string }> {
+  const { data, error } = await supabase.functions.invoke('empresa-criar-membro', { body: dados })
+  if (error) {
+    const contexto = (error as { context?: Response }).context
+    if (contexto && typeof contexto.json === 'function') {
+      let mensagem: string | undefined
+      try {
+        const corpo = await contexto.json()
+        mensagem = corpo?.error
+      } catch {
+        // corpo não é JSON — segue com a mensagem genérica
+      }
+      throw new Error(mensagem ?? error.message)
+    }
+    throw error
+  }
+  if (data?.error) throw new Error(data.error)
+  return data as { id: string }
+}
+
+export async function listMembrosDaEmpresa(empresaId: string): Promise<(PrestadorMembro & { nome: string; email: string | null })[]> {
+  const { data, error } = await supabase
+    .from('prestador_membros')
+    .select('*, prestadores!membro_id(nome, email)')
+    .eq('empresa_id', empresaId)
+    .order('criado_em', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const { prestadores, ...m } = row as unknown as PrestadorMembro & { prestadores: { nome: string; email: string | null } | null }
+    return { ...m, nome: prestadores?.nome ?? '—', email: prestadores?.email ?? null }
+  })
+}
+
+export async function definirAtivoMembro(id: string, ativo: boolean): Promise<void> {
+  const { error } = await supabase.from('prestador_membros').update({ ativo }).eq('id', id)
+  if (error) throw error
+}
+
+export async function getMinhaEmpresa(): Promise<Prestador | null> {
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user) return null
+  const { data, error } = await supabase
+    .from('prestador_membros')
+    .select('prestadores!empresa_id(*)')
+    .eq('membro_id', userData.user.id)
+    .eq('ativo', true)
+    .maybeSingle()
+  if (error) throw error
+  return (data?.prestadores as unknown as Prestador) ?? null
 }
 
 // ---------- Termos de uso ----------

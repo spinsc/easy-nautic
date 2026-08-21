@@ -312,6 +312,15 @@ export interface AdminNotificacaoStat {
   qtd: number
 }
 
+export interface PrestadorMembro {
+  id: string
+  empresa_id: string
+  membro_id: string
+  papel: string | null
+  ativo: boolean
+  criado_em: string
+}
+
 export interface TermosUso {
   id: string
   versao: number

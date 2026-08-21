@@ -26,6 +26,10 @@ import {
   salvarTokenPush,
   removerTokenPush,
   getMinhaAvaliacaoComoTomador,
+  getMinhaEmpresa,
+  listMembrosDaEmpresa,
+  criarMembroEmpresa,
+  definirAtivoMembro,
 } from '@/lib/api'
 import { solicitarTokenPush } from '@/lib/firebase'
 import type {
@@ -35,6 +39,7 @@ import type {
   Marca,
   Prestador,
   PrestadorCategoria,
+  PrestadorMembro,
   PushSubscription,
   StatusVerificacao,
 } from '@/types'
@@ -106,6 +111,15 @@ export default function Perfil() {
 
   const [avaliacaoTomador, setAvaliacaoTomador] = useState<{ media: number; total: number } | null>(null)
 
+  const [minhaEmpresa, setMinhaEmpresa] = useState<Prestador | null>(null)
+  const [membros, setMembros] = useState<(PrestadorMembro & { nome: string; email: string | null })[]>([])
+  const [adicionandoMembro, setAdicionandoMembro] = useState(false)
+  const [novoMembroNome, setNovoMembroNome] = useState('')
+  const [novoMembroEmail, setNovoMembroEmail] = useState('')
+  const [novoMembroSenha, setNovoMembroSenha] = useState('')
+  const [novoMembroPapel, setNovoMembroPapel] = useState('')
+  const [criandoMembro, setCriandoMembro] = useState(false)
+
   async function carregar() {
     setCarregando(true)
     try {
@@ -115,18 +129,32 @@ export default function Perfil() {
         setNome(p.nome)
         setTelefone(p.telefone ?? '')
         setCondicaoPagamentoPadrao(p.condicao_pagamento_padrao ?? '')
-        const [cats, minhas, admin, catalogoMarcas, marcasProprias, listaEstados, regioesProprias, assinaturasProprias, avaliacaoComoTomador] =
-          await Promise.all([
-            listCategoriasServico(),
-            listPrestadorCategorias(p.id),
-            souAdmin(),
-            listMarcas(),
-            listMinhasMarcas(p.id),
-            listEstados(),
-            listMinhasRegioes(p.id),
-            listMinhasAssinaturasPush(p.id),
-            getMinhaAvaliacaoComoTomador(),
-          ])
+        const empresa = await getMinhaEmpresa()
+        setMinhaEmpresa(empresa)
+        const contextoId = empresa?.id ?? p.id
+        const [
+          cats,
+          minhas,
+          admin,
+          catalogoMarcas,
+          marcasProprias,
+          listaEstados,
+          regioesProprias,
+          assinaturasProprias,
+          avaliacaoComoTomador,
+          membrosDaEmpresa,
+        ] = await Promise.all([
+          listCategoriasServico(),
+          listPrestadorCategorias(contextoId),
+          souAdmin(),
+          listMarcas(),
+          listMinhasMarcas(contextoId),
+          listEstados(),
+          listMinhasRegioes(contextoId),
+          listMinhasAssinaturasPush(p.id),
+          getMinhaAvaliacaoComoTomador(),
+          p.tipo_pessoa === 'PJ' ? listMembrosDaEmpresa(p.id) : Promise.resolve([]),
+        ])
         setCategorias(cats)
         setMinhasCategorias(minhas)
         setEhAdmin(admin)
@@ -136,6 +164,7 @@ export default function Perfil() {
         setMinhasRegioes(regioesProprias)
         setAssinaturasPush(assinaturasProprias)
         setAvaliacaoTomador(avaliacaoComoTomador)
+        setMembros(membrosDaEmpresa)
       }
       setErro(null)
     } catch (e) {
@@ -163,6 +192,8 @@ export default function Perfil() {
     }
   }
 
+  const contextoId = minhaEmpresa?.id ?? prestador?.id ?? null
+
   const categoriasDisponiveis = categorias.filter(
     (c) => !minhasCategorias.some((mc) => mc.categoria_servico_id === c.id)
   )
@@ -174,9 +205,9 @@ export default function Perfil() {
   const marcasDisponiveis = marcasCatalogo.filter((m) => !minhasMarcas.some((mm) => mm.id === m.id))
 
   async function adicionarMarca() {
-    if (!prestador || !marcaSelecionada) return
+    if (!contextoId || !marcaSelecionada) return
     try {
-      await addMinhaMarca(prestador.id, marcaSelecionada)
+      await addMinhaMarca(contextoId, marcaSelecionada)
       setMarcaSelecionada('')
       await carregar()
     } catch (e) {
@@ -208,9 +239,9 @@ export default function Perfil() {
   }
 
   async function adicionarRegiao() {
-    if (!prestador || !cidadeSelecionada) return
+    if (!contextoId || !cidadeSelecionada) return
     try {
-      await addMinhaRegiao(prestador.id, Number(cidadeSelecionada))
+      await addMinhaRegiao(contextoId, Number(cidadeSelecionada))
       setCidadeSelecionada('')
       await carregar()
     } catch (e) {
@@ -252,10 +283,10 @@ export default function Perfil() {
   }
 
   async function adicionarCategoria() {
-    if (!prestador || !categoriaSelecionada) return
+    if (!contextoId || !categoriaSelecionada) return
     try {
       await addPrestadorCategoria({
-        prestador_id: prestador.id,
+        prestador_id: contextoId,
         categoria_servico_id: categoriaSelecionada,
         especialidade: especialidade || null,
         regiao_atuacao: regiaoAtuacao || null,
@@ -291,6 +322,39 @@ export default function Perfil() {
       await carregar()
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao remover categoria'))
+    }
+  }
+
+  async function criarMembro() {
+    if (!novoMembroNome.trim() || !novoMembroEmail.trim() || !novoMembroSenha) return
+    setCriandoMembro(true)
+    setErro(null)
+    try {
+      await criarMembroEmpresa({
+        email: novoMembroEmail.trim(),
+        senha: novoMembroSenha,
+        nome: novoMembroNome.trim(),
+        papel: novoMembroPapel.trim() || undefined,
+      })
+      setNovoMembroNome('')
+      setNovoMembroEmail('')
+      setNovoMembroSenha('')
+      setNovoMembroPapel('')
+      setAdicionandoMembro(false)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao criar funcionário'))
+    } finally {
+      setCriandoMembro(false)
+    }
+  }
+
+  async function alternarAtivoMembro(id: string, ativo: boolean) {
+    try {
+      await definirAtivoMembro(id, ativo)
+      await carregar()
+    } catch (e) {
+      setErro(mensagemErro(e, 'Erro ao atualizar funcionário'))
     }
   }
 
@@ -406,6 +470,13 @@ export default function Perfil() {
           </button>
         </div>
       </header>
+
+      {minhaEmpresa && (
+        <div className="mb-6 rounded-md border border-tide-200 bg-tide-50 px-3 py-2 text-sm text-tide-800">
+          Você está atuando em nome de <strong>{minhaEmpresa.nome}</strong>. As categorias, marcas e regiões abaixo
+          pertencem à empresa.
+        </div>
+      )}
 
       {erro && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -639,6 +710,78 @@ export default function Perfil() {
           </div>
         </div>
       </section>
+
+      {prestador.tipo_pessoa === 'PJ' && (
+        <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
+          <div className="mb-1 flex items-center justify-between">
+            <h2 className="font-display text-lg text-slate-900">Minha equipe</h2>
+            {!adicionandoMembro && (
+              <button
+                onClick={() => setAdicionandoMembro(true)}
+                className="text-sm font-medium text-tide-600 hover:text-tide-700"
+              >
+                + Adicionar
+              </button>
+            )}
+          </div>
+          <p className="mb-4 text-xs text-slate-400">
+            Pessoas com login próprio autorizadas a atuar em nome da empresa (marcas, regiões, categorias, cotações
+            e chamados).
+          </p>
+
+          {membros.length === 0 ? (
+            <p className="mb-3 text-sm text-slate-400">Nenhum funcionário cadastrado ainda.</p>
+          ) : (
+            <div className="mb-4 space-y-2">
+              {membros.map((m) => (
+                <div key={m.id} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
+                  <div>
+                    <p className="text-slate-900">
+                      {m.nome} {m.papel && <span className="text-slate-400">· {m.papel}</span>}
+                    </p>
+                    <p className="text-xs text-slate-500">{m.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${m.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+                      {m.ativo ? 'Ativo' : 'Revogado'}
+                    </span>
+                    <button
+                      onClick={() => alternarAtivoMembro(m.id, !m.ativo)}
+                      className="text-xs font-medium text-tide-600 hover:text-tide-700"
+                    >
+                      {m.ativo ? 'Revogar' : 'Reativar'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {adicionandoMembro && (
+            <div className="space-y-4 border-t border-slate-200 pt-4">
+              <CampoTexto label="Nome" value={novoMembroNome} onChange={setNovoMembroNome} />
+              <CampoTexto label="E-mail" type="email" value={novoMembroEmail} onChange={setNovoMembroEmail} />
+              <CampoTexto label="Senha" type="password" value={novoMembroSenha} onChange={setNovoMembroSenha} />
+              <CampoTexto label="Cargo/função (opcional)" value={novoMembroPapel} onChange={setNovoMembroPapel} />
+              <div className="flex gap-2">
+                <button
+                  onClick={criarMembro}
+                  disabled={!novoMembroNome.trim() || !novoMembroEmail.trim() || !novoMembroSenha || criandoMembro}
+                  className="rounded-md bg-tide-700 px-4 py-2 text-sm font-medium text-white hover:bg-tide-800 disabled:opacity-50"
+                >
+                  {criandoMembro ? 'Criando…' : 'Criar acesso'}
+                </button>
+                <button
+                  onClick={() => setAdicionandoMembro(false)}
+                  className="rounded-md px-4 py-2 text-sm text-slate-500 hover:text-slate-900"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6">
         <h2 className="mb-1 font-display text-lg text-slate-900">Notificações push</h2>

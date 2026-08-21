@@ -13,6 +13,7 @@ import {
   listVisitasDoChamado,
   solicitarVisita,
   listAvaliacoesDoChamado,
+  getMinhaEmpresa,
 } from '@/lib/api'
 import type { Avaliacao, Chamado, ChamadoPergunta, ChamadoVisita, Prestador, StatusChamado } from '@/types'
 
@@ -63,12 +64,14 @@ export default function Chamados() {
   const [dataVisita, setDataVisita] = useState('')
 
   const [avaliacoesPorChamado, setAvaliacoesPorChamado] = useState<Record<string, Avaliacao[]>>({})
+  const [minhaEmpresa, setMinhaEmpresa] = useState<Prestador | null>(null)
 
   async function carregar() {
     setCarregando(true)
     try {
-      const [p, ch] = await Promise.all([getMeuPrestador(), listMeusChamados()])
+      const [p, empresa, ch] = await Promise.all([getMeuPrestador(), getMinhaEmpresa(), listMeusChamados()])
       setPrestador(p)
+      setMinhaEmpresa(empresa)
       setItens(ch)
       const perguntasEntries = await Promise.all(ch.map(async (c) => [c.id, await listPerguntasDoChamado(c.id)] as const))
       setPerguntasPorChamado(Object.fromEntries(perguntasEntries))
@@ -93,7 +96,7 @@ export default function Chamados() {
   async function mudarStatus(id: string, status: StatusChamado) {
     if (!prestador) return
     try {
-      await atualizarStatusChamado(id, status, prestador.id)
+      await atualizarStatusChamado(id, status, minhaEmpresa?.id ?? prestador.id)
       await carregar()
     } catch (e) {
       setErro(mensagemErro(e, 'Erro ao atualizar chamado'))
@@ -117,7 +120,7 @@ export default function Chamados() {
     try {
       await createCotacao(
         cotandoId,
-        prestador.id,
+        minhaEmpresa?.id ?? prestador.id,
         valorCotacao,
         descricaoCotacao || null,
         usarFormaGlobal ? null : { tipo: tipoPagamentoCustom, dados: dadosPagamentoCustom },
@@ -134,7 +137,7 @@ export default function Chamados() {
   async function enviarPergunta(chamadoId: string) {
     if (!prestador || !novaPergunta.trim()) return
     try {
-      await perguntarSobreChamado(chamadoId, prestador.id, novaPergunta.trim())
+      await perguntarSobreChamado(chamadoId, minhaEmpresa?.id ?? prestador.id, novaPergunta.trim())
       setNovaPergunta('')
       setPerguntandoId(null)
       await carregar()
@@ -146,7 +149,7 @@ export default function Chamados() {
   async function enviarSolicitacaoVisita(chamadoId: string) {
     if (!prestador || !dataVisita) return
     try {
-      await solicitarVisita(chamadoId, prestador.id, new Date(dataVisita).toISOString())
+      await solicitarVisita(chamadoId, minhaEmpresa?.id ?? prestador.id, new Date(dataVisita).toISOString())
       setDataVisita('')
       setVisitandoId(null)
       await carregar()
